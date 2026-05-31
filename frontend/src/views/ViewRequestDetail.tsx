@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { requestsApi, type RequestDetail, type Comment } from '../api/requests';
 import { attachmentsApi, type AttachmentView } from '../api/attachments';
+import { formTemplatesApi, type FormTemplate } from '../api/formTemplates';
 import { fmtDate, STATUS_COLORS } from '../lib/utils';
 import TopNav from '../components/layout/TopNav';
 import PortalBanner from '../components/layout/PortalBanner';
@@ -9,10 +10,17 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 interface Props { requestId: string; }
 
+function fmtDisplayDate(val: string): string {
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 export default function ViewRequestDetail({ requestId }: Props) {
   const [req,         setReq]         = useState<RequestDetail | null>(null);
   const [comments,    setComments]    = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<AttachmentView[]>([]);
+  const [template,    setTemplate]    = useState<FormTemplate | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [comment,     setComment]     = useState('');
   const [sending,     setSending]     = useState(false);
@@ -25,10 +33,18 @@ export default function ViewRequestDetail({ requestId }: Props) {
       requestsApi.listComments(requestId),
       attachmentsApi.list(requestId),
     ]).then(([{ data: r }, { data: c }, { data: a }]) => {
-      setReq(r);
+      setReq(r ?? null);
       setComments((c as { data: Comment[] } | null)?.data ?? []);
-      setAttachments(a);
+      setAttachments(a ?? []);
       setLoading(false);
+      if (r?.projectId) {
+        const slug = r.requestType.replace(/_/g, '-');
+        formTemplatesApi.listByProject(r.projectId)
+          .then(({ data }) => {
+            setTemplate(data?.data.find(t => t.slug === slug) ?? null);
+          })
+          .catch(() => {});
+      }
     });
   }, [requestId]);
 
@@ -66,6 +82,13 @@ export default function ViewRequestDetail({ requestId }: Props) {
     </div>
   );
 
+  // Merge top-level fields (priority, dueDate) into the payload for unified display
+  const displayData: Record<string, unknown> = {
+    ...req.payloadData,
+    priority: req.priority || undefined,
+    dueDate:  req.dueDate  || undefined,
+  };
+
   return (
     <div className="view view-detail">
       <TopNav />
@@ -89,6 +112,36 @@ export default function ViewRequestDetail({ requestId }: Props) {
           </div>
         </div>
 
+        {/* ── Request Details (payload fields) ─────────────────────────── */}
+        {template && (
+          <section className="detail-section">
+            <h2 className="detail-section-title">Request Details</h2>
+            <dl className="payload-grid">
+              {template.fieldSchema
+                .filter(f => f.type !== 'attachment')
+                .sort((a, b) => a.sortOrder - b.sortOrder)
+                .map(f => {
+                  const val = displayData[f.name];
+                  if (val === undefined || val === null || val === '') return null;
+                  return (
+                    <div key={f.name} className="payload-row">
+                      <dt className="payload-label">{f.label}</dt>
+                      <dd className="payload-value">
+                        {f.type === 'richtext'
+                          ? <div dangerouslySetInnerHTML={{ __html: val as string }} />
+                          : f.type === 'date'
+                            ? <span>{fmtDisplayDate(val as string)}</span>
+                            : <span>{String(val)}</span>
+                        }
+                      </dd>
+                    </div>
+                  );
+                })}
+            </dl>
+          </section>
+        )}
+
+        {/* ── Status History ────────────────────────────────────────────── */}
         <section className="detail-section">
           <h2 className="detail-section-title">Status History</h2>
           {req.history.length === 0
@@ -110,6 +163,7 @@ export default function ViewRequestDetail({ requestId }: Props) {
           }
         </section>
 
+        {/* ── Attachments ───────────────────────────────────────────────── */}
         <section className="detail-section">
           <h2 className="detail-section-title">
             Attachments {attachments.length > 0 && <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}>({attachments.length})</span>}
@@ -117,21 +171,34 @@ export default function ViewRequestDetail({ requestId }: Props) {
           {attachments.length === 0
             ? <p style={{ color: 'var(--muted)', fontSize: 14 }}>No attachments.</p>
             : <ul className="att-list">
-                {attachments.map((a) => (
-                  <li key={a.id}>
-                    <span style={{ fontSize: 20 }}>📎</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <a href={a.signedUrl} target="_blank" rel="noopener noreferrer">{a.fileName}</a>
-                      <div className="att-meta">
-                        {(a.size / 1024).toFixed(1)} KB · {a.contentType} · uploaded by {a.uploadedBy} · {fmtDate(a.uploadedAt)}
+                {attachments.map((a) => {
+                  const isImage = a.contentType.startsWith('image/');
+                  return (
+                    <li key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <span style={{ fontSize: 20 }}>📎</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <a href={a.signedUrl} download={a.fileName} target="_blank" rel="noopener noreferrer">{a.fileName}</a>
+                          <div className="att-meta">
+                            {(a.size / 1024).toFixed(1)} KB · {a.contentType} · uploaded by {a.uploadedBy} · {fmtDate(a.uploadedAt)}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
+                      {isImage && (
+                        <img
+                          src={a.signedUrl}
+                          alt={a.fileName}
+                          style={{ maxWidth: '100%', maxHeight: 480, objectFit: 'contain', borderRadius: 6, marginTop: 12, display: 'block', border: '1px solid var(--line-2)' }}
+                        />
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
           }
         </section>
 
+        {/* ── Comments ──────────────────────────────────────────────────── */}
         <section className="detail-section">
           <h2 className="detail-section-title">Comments</h2>
           {comments.length === 0

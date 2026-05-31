@@ -5,7 +5,7 @@ export const CreateRequestSchema = z.object({
   requestType:    z.enum(REQUEST_TYPES),
   title:          z.string().min(1).max(255),
   priority:       z.enum(['Highest', 'High', 'Medium', 'Low', 'Lowest']).default('Medium'),
-  dueDate:        z.string().datetime().nullable().optional(),
+  dueDate:        z.string().date().nullable().optional(),
   payload:        z.record(z.unknown()).default({}),
   idempotencyKey: z.string().max(64).nullable().optional(),
   projectId:      z.string().uuid().nullable().optional(),

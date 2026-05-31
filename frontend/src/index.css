@@ -397,6 +397,17 @@ button { font-family: inherit; cursor: pointer; }
 .att-list a:hover { text-decoration: underline; }
 .att-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
+/* Payload field display (request detail) */
+.payload-grid { margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.payload-row { display: grid; grid-template-columns: 190px 1fr; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.payload-row:last-child { border-bottom: none; }
+.payload-label { font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 0; padding-top: 2px; text-transform: uppercase; letter-spacing: .3px; }
+.payload-value { font-size: 14px; color: var(--ink); margin: 0; line-height: 1.55; }
+.payload-value p { margin: 0 0 6px; }
+.payload-value p:last-child { margin-bottom: 0; }
+.payload-value ul, .payload-value ol { margin: 4px 0 4px 18px; padding: 0; }
+@media (max-width: 600px) { .payload-row { grid-template-columns: 1fr; gap: 4px; } }
+
 @media (max-width: 920px) {
   .accountcol, .listcol { padding-left: 24px; padding-right: 24px; }
   .profile-grid { grid-template-columns: 1fr; }
