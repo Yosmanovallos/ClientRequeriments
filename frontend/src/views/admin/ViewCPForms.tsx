@@ -16,7 +16,6 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const [projects,       setProjects]       = useState<AdminProject[]>([]);
-  const [standardTpls,   setStandardTpls]   = useState<FormTemplate[]>([]);
   const [projConfigs,    setProjConfigs]    = useState<ProjectFormConfigEntry[]>([]);
   const [selectedProjId, setSelectedProjId] = useState<string>(initialProjectId ?? '');
   const [enabledIds,     setEnabledIds]     = useState<Set<string>>(new Set());
@@ -27,18 +26,15 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const [error,          setError]          = useState<string | null>(null);
   const [deletingId,     setDeletingId]     = useState<string | null>(null);
 
-  // Load projects + all standard templates once
+  // Load projects once
   useEffect(() => {
-    Promise.all([projectsApi.list(), formTemplatesApi.listAll()])
-      .then(([p, t]) => {
-        setProjects(p.data?.data ?? []);
-        setStandardTpls((t.data?.data ?? []).filter(tp => tp.isStandard));
-      })
-      .catch(() => setError('Failed to load data.'))
+    projectsApi.list()
+      .then(p => setProjects(p.data?.data ?? []))
+      .catch(() => setError('Failed to load projects.'))
       .finally(() => setLoading(false));
   }, []);
 
-  // When project changes, load that project's form configs (includes custom templates)
+  // Load project configs whenever the selected project changes
   useEffect(() => {
     if (!selectedProjId) { setProjConfigs([]); setEnabledIds(new Set()); return; }
     setLoadingForms(true);
@@ -51,11 +47,8 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
       .finally(() => setLoadingForms(false));
   }, [selectedProjId]);
 
-  // Display = standard templates + custom templates that have a config for this project
-  const customInProject = projConfigs
-    .filter(c => !c.template.isStandard)
-    .map(c => c.template);
-  const displayTemplates: FormTemplate[] = [...standardTpls, ...customInProject];
+  // Display exactly what this project has configured — nothing more, nothing less
+  const displayTemplates: FormTemplate[] = projConfigs.map(c => c.template);
 
   const toggleTemplate = (id: string) =>
     setEnabledIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -64,7 +57,6 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     if (!selectedProjId) return;
     setSaving(true);
     setSaveMsg('');
-    // Only send configs for templates visible in this project (never touch foreign custom templates)
     const configs = displayTemplates.map((t, i) => ({
       templateId: t.id,
       isEnabled:  enabledIds.has(t.id),
@@ -77,21 +69,25 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     setTimeout(() => setSaveMsg(''), 2500);
   };
 
+  const refreshConfigs = async () => {
+    const { data } = await formTemplatesApi.listProjectConfigs(selectedProjId);
+    const configs = data?.data ?? [];
+    setProjConfigs(configs);
+    setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
+  };
+
   const handleDelete = async (t: FormTemplate) => {
     if (!window.confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
     setDeletingId(t.id);
-    const { error: err } = await formTemplatesApi.removeFromProject(selectedProjId, t.id);
-    setDeletingId(null);
-    if (err) { setSaveMsg('Error deleting: ' + err.message); return; }
-    // Refresh both lists
-    const [tplRes, cfgRes] = await Promise.all([
-      formTemplatesApi.listAll(),
-      formTemplatesApi.listProjectConfigs(selectedProjId),
-    ]);
-    setStandardTpls((tplRes.data?.data ?? []).filter(tp => tp.isStandard));
-    const configs = cfgRes.data?.data ?? [];
-    setProjConfigs(configs);
-    setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
+    try {
+      const { error: err } = await formTemplatesApi.removeFromProject(selectedProjId, t.id);
+      if (err) { setSaveMsg('Error deleting: ' + err.message); return; }
+      await refreshConfigs();
+    } catch (e) {
+      setSaveMsg('Error deleting: ' + (e instanceof Error ? e.message : 'Unknown error'));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (loading) return <LoadingSpinner />;
@@ -144,7 +140,7 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                   {displayTemplates.length === 0 && (
                     <tr>
                       <td colSpan={5} style={{ color: 'var(--muted)', fontSize: 14, textAlign: 'center', padding: '28px 0' }}>
-                        No templates available.
+                        No templates yet. Click &quot;+ New Template&quot; to create one.
                       </td>
                     </tr>
                   )}
