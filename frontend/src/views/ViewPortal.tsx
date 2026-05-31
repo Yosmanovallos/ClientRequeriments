@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ProjectSummary } from '../auth';
 import TopNav from '../components/layout/TopNav';
-import Breadcrumbs from '../components/layout/Breadcrumbs';
 import HeroNetwork from '../components/brand/HeroNetwork';
 import Monogram from '../components/brand/Monogram';
 import SupportBadge from '../components/brand/SupportBadge';
@@ -23,7 +22,6 @@ export default function ViewPortal() {
 
   return (
     <div className="view view-portal">
-      <Breadcrumbs />
       <TopNav />
 
       <section className="hero">

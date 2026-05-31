@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import TopNav from '../components/layout/TopNav';
-import Breadcrumbs from '../components/layout/Breadcrumbs';
 import HeroNetwork from '../components/brand/HeroNetwork';
 import Monogram from '../components/brand/Monogram';
 
@@ -34,7 +33,6 @@ export default function ViewProjectPicker() {
 
   return (
     <div className="view view-portal">
-      <Breadcrumbs />
       <TopNav />
 
       <section className="hero">
