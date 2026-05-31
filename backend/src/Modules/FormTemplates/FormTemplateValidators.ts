@@ -1,21 +1,20 @@
 import { z } from 'zod';
 
+const OPTION_TYPES = ['select', 'radio', 'checkbox'] as const;
+
 const FormFieldDefSchema = z.object({
   name:        z.string().min(1).max(64).regex(/^[a-zA-Z][a-zA-Z0-9_]*$/, 'name must be a valid identifier'),
   label:       z.string().min(1).max(128),
-  type:        z.enum(['text', 'textarea', 'select', 'date', 'email', 'number']),
+  type:        z.enum(['text', 'textarea', 'richtext', 'select', 'radio', 'checkbox', 'date', 'email', 'number', 'attachment']),
   required:    z.boolean(),
   placeholder: z.string().max(255).optional(),
+  helpText:    z.string().max(500).optional(),
   options:     z.array(z.string().min(1).max(128)).optional(),
   sortOrder:   z.number().int().min(0).max(999),
 }).refine(
-  // select fields must have options
-  (f) => f.type !== 'select' || (Array.isArray(f.options) && f.options.length > 0),
-  { message: 'select-type fields must have at least one option' },
-).refine(
-  // non-select fields must NOT have options
-  (f) => f.type === 'select' || !f.options,
-  { message: 'options is only allowed for select-type fields' },
+  // select/radio/checkbox fields must have options
+  (f) => !OPTION_TYPES.includes(f.type as typeof OPTION_TYPES[number]) || (Array.isArray(f.options) && f.options.length > 0),
+  { message: 'select/radio/checkbox fields must have at least one option' },
 );
 
 export const FieldSchemaArraySchema = z.array(FormFieldDefSchema).min(1).max(50)

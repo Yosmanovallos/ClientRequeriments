@@ -38,9 +38,21 @@ export interface FormTemplate {
   fieldSchema: FormFieldDef[];
 }
 
+export interface ProjectFormConfigEntry {
+  id:        string;
+  projectId: string;
+  templateId: string;
+  isEnabled: boolean;
+  sortOrder: number;
+  template:  FormTemplate;
+}
+
 export const formTemplatesApi = {
   listByProject(projectId: string) {
     return api.get<{ data: FormTemplate[]; count: number }>(`/projects/${projectId}/forms`);
+  },
+  listProjectConfigs(projectId: string) {
+    return api.get<{ data: ProjectFormConfigEntry[]; count: number }>(`/projects/${projectId}/forms/configs`);
   },
   listAll() {
     return api.get<{ data: FormTemplate[]; count: number }>('/form-templates');
@@ -55,5 +67,11 @@ export const formTemplatesApi = {
     fieldSchema: FormFieldDef[];
   }) {
     return api.post<FormTemplate>('/form-templates', payload);
+  },
+  update(id: string, patch: { name?: string; description?: string; fieldSchema?: FormFieldDef[] }) {
+    return api.patch<FormTemplate>(`/form-templates/${id}`, patch);
+  },
+  remove(id: string) {
+    return api.delete<void>(`/form-templates/${id}`);
   },
 };

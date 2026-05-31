@@ -15,6 +15,7 @@ export interface AdminProject {
   name:         string;
   slug:         string;
   description:  string | null;
+  iconUrl:      string | null;
   memberCount:  number;
   requestCount: number;
   formCount:    number;
@@ -34,9 +35,9 @@ export const usersApi = {
 
 export const projectsApi = {
   list:         () => api.get<{ data: AdminProject[]; count: number }>('/projects'),
-  create:       (data: { name: string; slug: string; description?: string }) =>
+  create:       (data: { name: string; slug: string; description?: string; iconUrl?: string | null }) =>
     api.post<AdminProject>('/projects', data),
-  update:       (id: string, data: Partial<{ name: string; description: string; isActive: boolean }>) =>
+  update:       (id: string, data: Partial<{ name: string; description: string | null; iconUrl: string | null; isActive: boolean }>) =>
     api.patch<AdminProject>(`/projects/${id}`, data),
   members:      (id: string) => api.get<{ data: PortalUser[]; count: number }>(`/projects/${id}/members`),
   addMember:    (id: string, userId: string) => api.post<void>(`/projects/${id}/members`, { userId }),

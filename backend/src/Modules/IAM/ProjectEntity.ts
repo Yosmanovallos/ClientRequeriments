@@ -11,6 +11,7 @@ export interface Project {
   name:        string;
   slug:        string;          // URL-safe, unique within clientId
   description: string | null;
+  iconUrl:     string | null;  // project logo — base64 data URL or external URL
   isActive:    boolean;
   createdAt:   Date;
   updatedAt:   Date;
@@ -21,11 +22,13 @@ export interface CreateProjectCmd {
   name:        string;
   slug:        string;
   description?: string | null;
+  iconUrl?:     string | null;
 }
 
 export interface UpdateProjectPatch {
   name?:        string;
   description?: string | null;
+  iconUrl?:     string | null;
   isActive?:    boolean;
 }
 

@@ -13,7 +13,13 @@
 import { PrismaClient } from '@prisma/client';
 import { scrypt, randomBytes } from 'node:crypto';
 import { promisify } from 'node:util';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { STANDARD_TEMPLATES } from '../src/Modules/FormTemplates/standardTemplates.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const STONEBRIDGE_ICON = readFileSync(join(__dirname, 'stonebridge_icon.txt'), 'utf8').trim();
 
 const prisma        = new PrismaClient();
 const scryptAsync   = promisify(scrypt);
@@ -61,20 +67,22 @@ async function main() {
   // ── 3. Projects ────────────────────────────────────────────────────────────
   await prisma.project.upsert({
     where:  { id: PROJECT_BLG_ID },
-    update: {},
+    update: { name: 'BLG Power BI', iconUrl: null },
     create: {
       id: PROJECT_BLG_ID, clientId: DEMO_CLIENT_ID,
       name: 'BLG Power BI', slug: 'blg-power-bi',
       description: 'Bell Legal Group — Power BI report requests',
+      iconUrl: null, // uses the Bell monogram fallback in the UI
     },
   });
   await prisma.project.upsert({
     where:  { id: PROJECT_STONE_ID },
-    update: {},
+    update: { name: 'Stonebridge Analytics', iconUrl: STONEBRIDGE_ICON },
     create: {
       id: PROJECT_STONE_ID, clientId: DEMO_CLIENT_ID,
       name: 'Stonebridge Analytics', slug: 'stonebridge',
       description: 'Stonebridge — analytics and dashboard requests',
+      iconUrl: STONEBRIDGE_ICON,
     },
   });
 

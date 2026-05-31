@@ -9,6 +9,7 @@ const CreateProjectSchema = z.object({
   name:        z.string().min(1).max(128),
   slug:        z.string().min(1).max(64),
   description: z.string().max(2000).nullable().optional(),
+  iconUrl:     z.string().max(2_000_000).nullable().optional(), // base64 data URL or external URL
   /** SuperAdmin-only: target a specific client. Admin is forced to their own. */
   clientId:    z.string().uuid().optional(),
 });
@@ -16,6 +17,7 @@ const CreateProjectSchema = z.object({
 const UpdateProjectSchema = z.object({
   name:        z.string().min(1).max(128).optional(),
   description: z.string().max(2000).nullable().optional(),
+  iconUrl:     z.string().max(2_000_000).nullable().optional(),
   isActive:    z.boolean().optional(),
 });
 
@@ -45,6 +47,7 @@ export function registerProjectEndpoints(app: FastifyInstance, projectRepo: IPro
       name:        parsed.data.name,
       slug:        parsed.data.slug,
       description: parsed.data.description ?? null,
+      iconUrl:     parsed.data.iconUrl ?? null,
     });
     return reply.status(201).send(project);
   });

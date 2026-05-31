@@ -15,7 +15,7 @@ export class ProjectService {
    * Create a new project under a client. Slug must be URL-safe and unique within the client.
    * SuperAdmin can pass any clientId; Admin's clientId is forced server-side by the endpoint.
    */
-  async create(input: { clientId: string; name: string; slug: string; description?: string | null }): Promise<Project> {
+  async create(input: { clientId: string; name: string; slug: string; description?: string | null; iconUrl?: string | null }): Promise<Project> {
     if (!input.name.trim())            throw Errors.badRequest('Project name is required');
     if (!SLUG_RX.test(input.slug))     throw Errors.badRequest('Project slug must be lowercase letters, digits, and hyphens (max 64 chars)');
 
@@ -27,6 +27,7 @@ export class ProjectService {
       name:        input.name.trim(),
       slug:        input.slug,
       description: input.description ?? null,
+      iconUrl:     input.iconUrl ?? null,
     });
   }
 

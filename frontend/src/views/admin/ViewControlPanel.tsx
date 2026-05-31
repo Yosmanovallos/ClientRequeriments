@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import TopNav from '../../components/layout/TopNav';
+import type { FormTemplate } from '../../api/formTemplates';
 
 export type CPSection = 'overview' | 'users' | 'projects' | 'forms' | 'form-builder' | 'project-members';
 
@@ -36,11 +37,14 @@ export default function ViewControlPanel({ initialSection }: Props) {
   const defaultSection: CPSection = isSuperAdmin ? (initialSection ?? 'overview') : 'forms';
   const [section,           setSection]           = useState<CPSection>(defaultSection);
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
+  const [builderTemplate,   setBuilderTemplate]   = useState<FormTemplate | undefined>(undefined);
 
   const nav = isSuperAdmin ? SUPER_ADMIN_NAV : ADMIN_NAV;
 
-  const handleNavigate = (s: CPSection, projectId?: string) => {
+  const handleNavigate = (s: CPSection, projectId?: string, editTemplate?: FormTemplate) => {
     if (projectId !== undefined) setSelectedProjectId(projectId);
+    if (s !== 'form-builder') setBuilderTemplate(undefined);
+    else if (editTemplate !== undefined) setBuilderTemplate(editTemplate);
     setSection(s);
   };
 
@@ -87,7 +91,11 @@ export default function ViewControlPanel({ initialSection }: Props) {
               <ViewCPForms projectId={selectedProjectId} onNavigate={handleNavigate} />
             )}
             {section === 'form-builder' && (
-              <ViewCPFormBuilder onNavigate={handleNavigate} />
+              <ViewCPFormBuilder
+                projectId={selectedProjectId}
+                editTemplate={builderTemplate}
+                onNavigate={handleNavigate}
+              />
             )}
           </React.Suspense>
         </main>

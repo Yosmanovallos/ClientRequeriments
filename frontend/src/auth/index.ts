@@ -14,9 +14,10 @@ const IS_LOCAL    = AUTH_PROVIDER === 'local';
 const IS_SUPABASE = !IS_LOCAL && !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 export interface ProjectSummary {
-  id:   string;
-  name: string;
-  slug: string;
+  id:      string;
+  name:    string;
+  slug:    string;
+  iconUrl: string | null;
 }
 
 export interface UserSession {
@@ -52,8 +53,8 @@ async function fetchEnrichment(
 
   let projects: ProjectSummary[] = [];
   if (role !== null) {
-    const projRes = await api.get<{ data: Array<{ id: string; name: string; slug: string }> }>('/projects');
-    projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug })) ?? [];
+    const projRes = await api.get<{ data: Array<{ id: string; name: string; slug: string; iconUrl: string | null }> }>('/projects');
+    projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug, iconUrl: p.iconUrl ?? null })) ?? [];
   }
 
   return { userId, email, displayName, accessToken, role, projects, projectIds };
@@ -129,8 +130,8 @@ export const auth = {
         const projectIds = meRes.data.projectIds ?? [];
         let projects: ProjectSummary[] = [];
         if (role !== null) {
-          const projRes = await api.get<{ data: Array<{ id: string; name: string; slug: string }> }>('/projects');
-          projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug })) ?? [];
+          const projRes = await api.get<{ data: Array<{ id: string; name: string; slug: string; iconUrl: string | null }> }>('/projects');
+          projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug, iconUrl: p.iconUrl ?? null })) ?? [];
         }
         return {
           userId:      meRes.data.id,

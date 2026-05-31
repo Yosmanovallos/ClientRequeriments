@@ -77,7 +77,13 @@ export default function ViewProjectPicker() {
                   className="portal-card is-live"
                   onClick={() => pick(i)}
                 >
-                  <div className="portal-icon"><Monogram /></div>
+                  <div className="portal-icon">
+                    {p.iconUrl
+                      ? <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', flex: 'none', background: '#f0f0f0' }}>
+                          <img src={p.iconUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      : <Monogram />}
+                  </div>
                   <div className="portal-text">
                     <h3>{p.name}</h3>
                     <p style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 11 }}>

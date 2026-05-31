@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
-import { formTemplatesApi, type FormFieldDef } from '../../api/formTemplates';
+import { formTemplatesApi, type FormFieldDef, type FormTemplate } from '../../api/formTemplates';
+import { api } from '../../api/client';
 import type { CPSection } from './ViewControlPanel';
 
 interface Props {
-  onNavigate: (s: CPSection) => void;
+  projectId?:   string;
+  editTemplate?: FormTemplate;
+  onNavigate:   (s: CPSection, projectId?: string) => void;
 }
 
-const FIELD_TYPES = ['text', 'textarea', 'select', 'date', 'email', 'number'] as const;
+const FIELD_TYPES = [
+  'text', 'textarea', 'richtext',
+  'select', 'radio', 'checkbox',
+  'date', 'email', 'number', 'attachment',
+] as const;
 type FieldType = typeof FIELD_TYPES[number];
 
 interface FieldDraft {
@@ -15,7 +22,8 @@ interface FieldDraft {
   type:        FieldType;
   required:    boolean;
   placeholder: string;
-  options:     string;
+  helpText:    string;
+  options:     string; // comma-separated; used for select/radio/checkbox
 }
 
 function autoSlug(s: string) {
@@ -27,14 +35,36 @@ function autoId(label: string) {
 }
 
 function blankField(): FieldDraft {
-  return { name: '', label: '', type: 'text', required: false, placeholder: '', options: '' };
+  return { name: '', label: '', type: 'text', required: false, placeholder: '', helpText: '', options: '' };
 }
 
-export default function ViewCPFormBuilder({ onNavigate }: Props) {
-  const [name,    setName]    = useState('');
-  const [slug,    setSlug]    = useState('');
-  const [desc,    setDesc]    = useState('');
-  const [fields,  setFields]  = useState<FieldDraft[]>([blankField()]);
+function templateToFieldDrafts(tpl: FormTemplate): FieldDraft[] {
+  return [...tpl.fieldSchema]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(f => ({
+      name:        f.name,
+      label:       f.label,
+      type:        f.type as FieldType,
+      required:    f.required,
+      placeholder: f.placeholder ?? '',
+      helpText:    f.helpText ?? '',
+      options:     f.options?.join(', ') ?? '',
+    }));
+}
+
+function needsOptions(type: FieldType) {
+  return type === 'select' || type === 'radio' || type === 'checkbox';
+}
+
+export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate }: Props) {
+  const isEditing = !!editTemplate;
+
+  const [name,    setName]    = useState(editTemplate?.name ?? '');
+  const [slug,    setSlug]    = useState(editTemplate?.slug ?? '');
+  const [desc,    setDesc]    = useState(editTemplate?.description ?? '');
+  const [fields,  setFields]  = useState<FieldDraft[]>(
+    editTemplate ? templateToFieldDrafts(editTemplate) : [blankField()],
+  );
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
   const [success, setSuccess] = useState('');
@@ -47,47 +77,79 @@ export default function ViewCPFormBuilder({ onNavigate }: Props) {
   const removeField = (i: number) =>
     setFields(prev => prev.filter((_, idx) => idx !== i));
 
-  const handleSave = async () => {
-    setError('');
-    if (!name.trim() || !slug.trim()) { setError('Name and slug are required.'); return; }
-    for (const f of fields) {
-      if (!f.name.trim() || !f.label.trim()) { setError('Every field needs a name and label.'); return; }
-      if (f.type === 'select' && !f.options.trim()) { setError(`Select field "${f.label}" needs at least one option.`); return; }
-    }
-
-    const fieldSchema: FormFieldDef[] = fields.map((f, i) => {
-      const base: FormFieldDef = {
+  const buildFieldSchema = (): FormFieldDef[] =>
+    fields.map((f, i) => {
+      const def: FormFieldDef = {
         name:      f.name.trim(),
         label:     f.label.trim(),
         type:      f.type,
         required:  f.required,
         sortOrder: i,
-        ...(f.placeholder.trim() ? { placeholder: f.placeholder.trim() } : {}),
       };
-      if (f.type === 'select') {
-        base.options = f.options.split(',').map(o => o.trim()).filter(Boolean);
+      if (f.placeholder.trim()) def.placeholder = f.placeholder.trim();
+      if (f.helpText.trim())    def.helpText    = f.helpText.trim();
+      if (needsOptions(f.type)) {
+        def.options = f.options.split(',').map(o => o.trim()).filter(Boolean);
       }
-      return base;
+      return def;
     });
 
+  const validate = (): string | null => {
+    if (!name.trim() || !slug.trim()) return 'Name and slug are required.';
+    for (const f of fields) {
+      if (!f.name.trim() || !f.label.trim()) return 'Every field needs a name and label.';
+      if (needsOptions(f.type) && !f.options.trim())
+        return `"${f.label}" (${f.type}) needs at least one option.`;
+    }
+    return null;
+  };
+
+  const handleSave = async () => {
+    setError('');
+    const err = validate();
+    if (err) { setError(err); return; }
+
+    const fieldSchema = buildFieldSchema();
     setSaving(true);
-    const { error: err } = await formTemplatesApi.create({
-      name:        name.trim(),
-      slug:        slug.trim(),
-      description: desc.trim() || undefined,
-      fieldSchema,
-    });
-    setSaving(false);
-    if (err) { setError(err.message); return; }
-    setSuccess('Template created! Redirecting…');
-    setTimeout(() => onNavigate('forms'), 1500);
+
+    if (isEditing) {
+      const { error: e } = await formTemplatesApi.update(editTemplate.id, {
+        name:        name.trim(),
+        description: desc.trim() || undefined,
+        fieldSchema,
+      });
+      setSaving(false);
+      if (e) { setError(e.message); return; }
+      setSuccess('Template updated! Redirecting…');
+    } else {
+      const { data: created, error: e } = await formTemplatesApi.create({
+        name:        name.trim(),
+        slug:        slug.trim(),
+        description: desc.trim() || undefined,
+        fieldSchema,
+      });
+      if (e) { setSaving(false); setError(e.message); return; }
+
+      // Bind the new template to the selected project only
+      if (projectId && created) {
+        await api.put<void>(`/projects/${projectId}/forms`, {
+          configs: [{ templateId: created.id, isEnabled: false, sortOrder: 999 }],
+        });
+      }
+      setSaving(false);
+      setSuccess('Template created! Redirecting…');
+    }
+
+    setTimeout(() => onNavigate('forms', projectId), 1500);
   };
 
   return (
     <div style={{ maxWidth: 700 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button className="cp-back" onClick={() => onNavigate('forms')}>← Back to Forms</button>
-        <h2 className="account-title" style={{ margin: 0 }}>New Form Template</h2>
+        <button className="cp-back" onClick={() => onNavigate('forms', projectId)}>← Back to Forms</button>
+        <h2 className="account-title" style={{ margin: 0 }}>
+          {isEditing ? 'Edit Form Template' : 'New Form Template'}
+        </h2>
       </div>
 
       {error   && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
@@ -99,13 +161,15 @@ export default function ViewCPFormBuilder({ onNavigate }: Props) {
         <div className="field" style={{ marginBottom: 14 }}>
           <label className="field-label">Name <span className="req-star">*</span></label>
           <input className="txt" value={name}
-            onChange={e => { setName(e.target.value); setSlug(autoSlug(e.target.value)); }} />
+            onChange={e => { setName(e.target.value); if (!isEditing) setSlug(autoSlug(e.target.value)); }} />
         </div>
-        <div className="field" style={{ marginBottom: 14 }}>
-          <label className="field-label">Slug <span className="req-star">*</span></label>
-          <input className="txt" value={slug} onChange={e => setSlug(e.target.value)}
-            placeholder="lowercase-dashes-only" />
-        </div>
+        {!isEditing && (
+          <div className="field" style={{ marginBottom: 14 }}>
+            <label className="field-label">Slug <span className="req-star">*</span></label>
+            <input className="txt" value={slug} onChange={e => setSlug(e.target.value)}
+              placeholder="lowercase-dashes-only" />
+          </div>
+        )}
         <div className="field" style={{ marginBottom: 0 }}>
           <label className="field-label">Description</label>
           <textarea className="txt txt-area" value={desc} onChange={e => setDesc(e.target.value)}
@@ -145,7 +209,7 @@ export default function ViewCPFormBuilder({ onNavigate }: Props) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
               <div className="field" style={{ margin: 0 }}>
                 <label className="field-label" style={{ fontSize: 12 }}>Type</label>
                 <select className="txt" value={f.type}
@@ -157,12 +221,13 @@ export default function ViewCPFormBuilder({ onNavigate }: Props) {
               <div className="field" style={{ margin: 0 }}>
                 <label className="field-label" style={{ fontSize: 12 }}>Placeholder</label>
                 <input className="txt" value={f.placeholder}
-                  onChange={e => updateField(i, { placeholder: e.target.value })} />
+                  onChange={e => updateField(i, { placeholder: e.target.value })}
+                  disabled={f.type === 'attachment' || f.type === 'radio' || f.type === 'checkbox'} />
               </div>
             </div>
 
-            {f.type === 'select' && (
-              <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
+            {needsOptions(f.type) && (
+              <div className="field" style={{ marginBottom: 10 }}>
                 <label className="field-label" style={{ fontSize: 12 }}>
                   Options <span className="req-star">*</span>
                   <span style={{ fontWeight: 400, color: 'var(--muted)', marginLeft: 6 }}>(comma-separated)</span>
@@ -173,7 +238,14 @@ export default function ViewCPFormBuilder({ onNavigate }: Props) {
               </div>
             )}
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, cursor: 'pointer', color: 'var(--ink)' }}>
+            <div className="field" style={{ marginBottom: 10 }}>
+              <label className="field-label" style={{ fontSize: 12 }}>Help text <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(shown below the field in gray)</span></label>
+              <input className="txt" value={f.helpText}
+                onChange={e => updateField(i, { helpText: e.target.value })}
+                placeholder="Optional hint for the user" />
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--ink)' }}>
               <input type="checkbox" checked={f.required} onChange={e => updateField(i, { required: e.target.checked })} />
               Required field
             </label>
@@ -184,9 +256,9 @@ export default function ViewCPFormBuilder({ onNavigate }: Props) {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
         <button className="btn-send" style={{ height: 42, padding: '0 24px' }}
           onClick={handleSave} disabled={saving}>
-          {saving ? 'Creating…' : 'Create Template'}
+          {saving ? (isEditing ? 'Saving…' : 'Creating…') : (isEditing ? 'Save changes' : 'Create Template')}
         </button>
-        <button className="btn-cancel" onClick={() => onNavigate('forms')}>Cancel</button>
+        <button className="btn-cancel" onClick={() => onNavigate('forms', projectId)}>Cancel</button>
       </div>
     </div>
   );

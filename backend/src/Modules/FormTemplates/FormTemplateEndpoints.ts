@@ -70,6 +70,29 @@ export function registerFormTemplateEndpoints(
 
   // ── Per-project enabling ───────────────────────────────────────────────
 
+  // GET /projects/:id/forms/configs — all configs with embedded template (Admin use; shows enabled + disabled)
+  app.get<{ Params: { id: string } }>('/projects/:id/forms/configs', async (req, reply) => {
+    requirePermission(req.user, 'formtemplates.configure');
+    const project = await projectRepo.findById(req.params.id);
+    if (!project) return reply.status(404).send({ title: 'NOT_FOUND', status: 404, detail: 'Project not found' });
+    requireProjectAccess(req.user, project.id, project.clientId);
+    if ((req.user.role as Role) === 'ADMIN' && !req.user.projectIds?.includes(project.id)) {
+      return reply.status(403).send({ title: 'FORBIDDEN', status: 403, detail: 'No access to this project' });
+    }
+    const configs = await svc.listProjectConfigs(project.id);
+    const enriched = (await Promise.all(
+      configs.map(async c => {
+        try {
+          const template = await svc.getById(c.templateId);
+          return { ...c, template };
+        } catch {
+          return null; // orphan config — template deleted
+        }
+      }),
+    )).filter(Boolean);
+    return reply.send({ data: enriched, count: enriched.length });
+  });
+
   // GET /projects/:id/forms — list enabled (visible to anyone with project access)
   app.get<{ Params: { id: string } }>('/projects/:id/forms', async (req, reply) => {
     requirePermission(req.user, 'formtemplates.read');

@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { projectsApi, type AdminProject } from '../../api/admin';
-import { formTemplatesApi, type FormTemplate } from '../../api/formTemplates';
+import { formTemplatesApi, type FormTemplate, type ProjectFormConfigEntry } from '../../api/formTemplates';
 import { api } from '../../api/client';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import type { CPSection } from './ViewControlPanel';
 
 interface Props {
   projectId?: string;
-  onNavigate: (s: CPSection, projectId?: string) => void;
+  onNavigate: (s: CPSection, projectId?: string, editTemplate?: FormTemplate) => void;
 }
 
 export default function ViewCPForms({ projectId: initialProjectId, onNavigate }: Props) {
@@ -16,7 +16,8 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const [projects,       setProjects]       = useState<AdminProject[]>([]);
-  const [allTemplates,   setAllTemplates]   = useState<FormTemplate[]>([]);
+  const [standardTpls,   setStandardTpls]   = useState<FormTemplate[]>([]);
+  const [projConfigs,    setProjConfigs]    = useState<ProjectFormConfigEntry[]>([]);
   const [selectedProjId, setSelectedProjId] = useState<string>(initialProjectId ?? '');
   const [enabledIds,     setEnabledIds]     = useState<Set<string>>(new Set());
   const [loading,        setLoading]        = useState(true);
@@ -24,24 +25,37 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const [saving,         setSaving]         = useState(false);
   const [saveMsg,        setSaveMsg]        = useState('');
   const [error,          setError]          = useState<string | null>(null);
+  const [deletingId,     setDeletingId]     = useState<string | null>(null);
 
+  // Load projects + all standard templates once
   useEffect(() => {
     Promise.all([projectsApi.list(), formTemplatesApi.listAll()])
       .then(([p, t]) => {
         setProjects(p.data?.data ?? []);
-        setAllTemplates(t.data?.data ?? []);
+        setStandardTpls((t.data?.data ?? []).filter(tp => tp.isStandard));
       })
       .catch(() => setError('Failed to load data.'))
       .finally(() => setLoading(false));
   }, []);
 
+  // When project changes, load that project's form configs (includes custom templates)
   useEffect(() => {
-    if (!selectedProjId) { setEnabledIds(new Set()); return; }
+    if (!selectedProjId) { setProjConfigs([]); setEnabledIds(new Set()); return; }
     setLoadingForms(true);
-    formTemplatesApi.listByProject(selectedProjId)
-      .then(({ data }) => setEnabledIds(new Set((data?.data ?? []).map(t => t.id))))
+    formTemplatesApi.listProjectConfigs(selectedProjId)
+      .then(({ data }) => {
+        const configs = data?.data ?? [];
+        setProjConfigs(configs);
+        setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
+      })
       .finally(() => setLoadingForms(false));
   }, [selectedProjId]);
+
+  // Display = standard templates + custom templates that have a config for this project
+  const customInProject = projConfigs
+    .filter(c => !c.template.isStandard)
+    .map(c => c.template);
+  const displayTemplates: FormTemplate[] = [...standardTpls, ...customInProject];
 
   const toggleTemplate = (id: string) =>
     setEnabledIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -50,7 +64,8 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     if (!selectedProjId) return;
     setSaving(true);
     setSaveMsg('');
-    const configs = allTemplates.map((t, i) => ({
+    // Only send configs for templates visible in this project (never touch foreign custom templates)
+    const configs = displayTemplates.map((t, i) => ({
       templateId: t.id,
       isEnabled:  enabledIds.has(t.id),
       sortOrder:  i,
@@ -62,11 +77,25 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     setTimeout(() => setSaveMsg(''), 2500);
   };
 
+  const handleDelete = async (t: FormTemplate) => {
+    if (!window.confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
+    setDeletingId(t.id);
+    const { error: err } = await formTemplatesApi.remove(t.id);
+    setDeletingId(null);
+    if (err) { setSaveMsg('Error deleting: ' + err.message); return; }
+    // Refresh project configs
+    if (selectedProjId) {
+      const { data } = await formTemplatesApi.listProjectConfigs(selectedProjId);
+      const configs = data?.data ?? [];
+      setProjConfigs(configs);
+      setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
   if (error)   return <p style={{ color: 'var(--ink-2)' }}>{error}</p>;
 
-  // SUPER_ADMIN sees all projects; ADMIN only sees their explicitly assigned projects
-  const assignedIds    = user?.projectIds ?? [];
+  const assignedIds     = user?.projectIds ?? [];
   const visibleProjects = isSuperAdmin
     ? projects
     : projects.filter(p => assignedIds.includes(p.id));
@@ -75,8 +104,13 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <h2 className="account-title" style={{ margin: 0 }}>Forms</h2>
-        <button className="btn-send" style={{ height: 36, padding: '0 16px', fontSize: 13 }}
-          onClick={() => onNavigate('form-builder')}>
+        <button
+          className="btn-send"
+          style={{ height: 36, padding: '0 16px', fontSize: 13 }}
+          onClick={() => onNavigate('form-builder', selectedProjId || undefined)}
+          disabled={!selectedProjId}
+          title={selectedProjId ? undefined : 'Select a project first'}
+        >
           + New Template
         </button>
       </div>
@@ -101,17 +135,18 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                     <th>Slug</th>
                     <th>Type</th>
                     <th style={{ textAlign: 'center' }}>Enabled</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {allTemplates.length === 0 && (
+                  {displayTemplates.length === 0 && (
                     <tr>
-                      <td colSpan={4} style={{ color: 'var(--muted)', fontSize: 14, textAlign: 'center', padding: '28px 0' }}>
+                      <td colSpan={5} style={{ color: 'var(--muted)', fontSize: 14, textAlign: 'center', padding: '28px 0' }}>
                         No templates available.
                       </td>
                     </tr>
                   )}
-                  {allTemplates.map(t => (
+                  {displayTemplates.map(t => (
                     <tr key={t.id}>
                       <td>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
@@ -126,6 +161,26 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                       <td style={{ textAlign: 'center' }}>
                         <input type="checkbox" checked={enabledIds.has(t.id)}
                           onChange={() => toggleTemplate(t.id)} />
+                      </td>
+                      <td>
+                        {!t.isStandard && (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              className="topnav-action"
+                              style={{ fontSize: 12, padding: '2px 10px' }}
+                              onClick={() => onNavigate('form-builder', selectedProjId, t)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              style={{ fontSize: 12, padding: '2px 10px', border: 'none', borderRadius: 4, background: '#ffeaea', color: '#a30000', cursor: 'pointer', fontWeight: 600 }}
+                              disabled={deletingId === t.id}
+                              onClick={() => handleDelete(t)}
+                            >
+                              {deletingId === t.id ? '…' : 'Delete'}
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
