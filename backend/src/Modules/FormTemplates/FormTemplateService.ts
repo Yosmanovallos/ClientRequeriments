@@ -32,12 +32,7 @@ export class FormTemplateService {
   }
 
   async update(id: string, patch: UpdateFormTemplatePatch): Promise<FormTemplate> {
-    const existing = await this.getById(id);
-    if (existing.isStandard && patch.fieldSchema) {
-      // Allow renames + description edits on standard templates, but block schema edits —
-      // they're versioned with the seed.
-      throw Errors.forbidden('Standard templates have a fixed fieldSchema');
-    }
+    await this.getById(id);
     if (patch.fieldSchema) {
       const parsed = FieldSchemaArraySchema.safeParse(patch.fieldSchema);
       if (!parsed.success) throw Errors.badRequest(`Invalid fieldSchema: ${parsed.error.message}`);
@@ -46,8 +41,7 @@ export class FormTemplateService {
   }
 
   async delete(id: string): Promise<void> {
-    const t = await this.getById(id);
-    if (t.isStandard) throw Errors.forbidden('Standard templates cannot be deleted');
+    await this.getById(id);
     await this.deps.templates.delete(id);
   }
 

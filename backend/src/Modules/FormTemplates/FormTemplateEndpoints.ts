@@ -61,7 +61,7 @@ export function registerFormTemplateEndpoints(
     return reply.send(updated);
   });
 
-  // DELETE /form-templates/:id  (standard templates cannot be deleted — Service enforces)
+  // DELETE /form-templates/:id
   app.delete<{ Params: { id: string } }>('/form-templates/:id', async (req, reply) => {
     requirePermission(req.user, 'formtemplates.delete');
     await svc.delete(req.params.id);

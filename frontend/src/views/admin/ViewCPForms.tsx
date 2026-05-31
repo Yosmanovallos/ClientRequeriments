@@ -83,10 +83,14 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     const { error: err } = await formTemplatesApi.remove(t.id);
     setDeletingId(null);
     if (err) { setSaveMsg('Error deleting: ' + err.message); return; }
-    // Refresh project configs
-    if (selectedProjId) {
-      const { data } = await formTemplatesApi.listProjectConfigs(selectedProjId);
-      const configs = data?.data ?? [];
+    // Refresh both standard templates and project configs
+    const [tplRes, cfgRes] = await Promise.all([
+      formTemplatesApi.listAll(),
+      selectedProjId ? formTemplatesApi.listProjectConfigs(selectedProjId) : Promise.resolve({ data: null }),
+    ]);
+    setStandardTpls((tplRes.data?.data ?? []).filter(tp => tp.isStandard));
+    if (cfgRes.data) {
+      const configs = cfgRes.data.data ?? [];
       setProjConfigs(configs);
       setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
     }
@@ -153,34 +157,30 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                         {t.description && <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t.description}</div>}
                       </td>
                       <td style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace' }}>{t.slug}</td>
-                      <td>
-                        <span className={`badge ${t.isStandard ? 'badge-blue' : 'badge-grey'}`}>
-                          {t.isStandard ? 'Standard' : 'Custom'}
-                        </span>
+                      <td style={{ fontSize: 12, color: 'var(--muted)' }}>
+                        {t.isStandard ? 'Standard' : 'Custom'}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <input type="checkbox" checked={enabledIds.has(t.id)}
                           onChange={() => toggleTemplate(t.id)} />
                       </td>
                       <td>
-                        {!t.isStandard && (
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button
-                              className="topnav-action"
-                              style={{ fontSize: 12, padding: '2px 10px' }}
-                              onClick={() => onNavigate('form-builder', selectedProjId, t)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              style={{ fontSize: 12, padding: '2px 10px', border: 'none', borderRadius: 4, background: '#ffeaea', color: '#a30000', cursor: 'pointer', fontWeight: 600 }}
-                              disabled={deletingId === t.id}
-                              onClick={() => handleDelete(t)}
-                            >
-                              {deletingId === t.id ? '…' : 'Delete'}
-                            </button>
-                          </div>
-                        )}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            className="topnav-action"
+                            style={{ fontSize: 12, padding: '2px 10px' }}
+                            onClick={() => onNavigate('form-builder', selectedProjId, t)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            style={{ fontSize: 12, padding: '2px 10px', border: 'none', borderRadius: 4, background: '#ffeaea', color: '#a30000', cursor: 'pointer', fontWeight: 600 }}
+                            disabled={deletingId === t.id}
+                            onClick={() => handleDelete(t)}
+                          >
+                            {deletingId === t.id ? '…' : 'Delete'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
