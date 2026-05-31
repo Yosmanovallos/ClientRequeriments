@@ -107,7 +107,7 @@ export class InMemoryProjectRepository implements IProjectRepository {
       ...p,
       memberCount:  [...this.members.values()].filter(m => m.projectId === p.id).length,
       requestCount: 0,    // InMemory has no cross-module link; tests stub this
-      enabledForms: 0,
+      formCount:    0,
     }));
   }
 }
@@ -198,7 +198,7 @@ export class PrismaProjectRepository implements IProjectRepository {
       ...this.toDomain(r),
       memberCount:  r._count.members,
       requestCount: r._count.requests,
-      enabledForms: r._count.formConfigs,
+      formCount:    r._count.formConfigs,
     }));
   }
 

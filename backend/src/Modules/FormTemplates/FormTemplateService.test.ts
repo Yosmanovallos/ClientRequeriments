@@ -38,7 +38,7 @@ describe('FormTemplateService.create', () => {
     await expect(svc.create({
       clientId: CLIENT_A, name: 'X', slug: 'x',
       fieldSchema: [{ name: 'bad', label: 'B', type: 'select', required: true, sortOrder: 1 }] as never,
-    })).rejects.toThrow(/select-type fields must have at least one option/);
+    })).rejects.toThrow(/select\/radio\/checkbox fields must have at least one option/);
   });
 
   it('rejects duplicate field names in same template', async () => {
@@ -53,7 +53,7 @@ describe('FormTemplateService.create', () => {
   });
 });
 
-describe('FormTemplateService.update — standard template protection', () => {
+describe('FormTemplateService.update', () => {
   it('allows renaming a standard template', async () => {
     const { svc, repo } = makeSvc();
     const seeded = await repo.create({
@@ -64,15 +64,15 @@ describe('FormTemplateService.update — standard template protection', () => {
     expect(updated.name).toBe('Standard (renamed)');
   });
 
-  it('REJECTS fieldSchema edit on a standard template', async () => {
+  it('allows fieldSchema edit on a standard template', async () => {
     const { svc, repo } = makeSvc();
     const seeded = await repo.create({
       clientId: CLIENT_A, name: 'Standard', slug: 'std',
       fieldSchema: sampleFields, isStandard: true,
     });
-    await expect(svc.update(seeded.id, {
-      fieldSchema: [{ name: 'new', label: 'New', type: 'text', required: true, sortOrder: 1 }],
-    })).rejects.toThrow(/fixed fieldSchema/);
+    const newFields: FormFieldDef[] = [{ name: 'new', label: 'New', type: 'text', required: true, sortOrder: 1 }];
+    const updated = await svc.update(seeded.id, { fieldSchema: newFields });
+    expect(updated.fieldSchema).toHaveLength(1);
   });
 
   it('allows fieldSchema edit on a custom template', async () => {
@@ -88,12 +88,13 @@ describe('FormTemplateService.update — standard template protection', () => {
 });
 
 describe('FormTemplateService.delete', () => {
-  it('rejects deleting a standard template', async () => {
+  it('deletes a standard template', async () => {
     const { svc, repo } = makeSvc();
     const seeded = await repo.create({
       clientId: CLIENT_A, name: 'Standard', slug: 'std', fieldSchema: sampleFields, isStandard: true,
     });
-    await expect(svc.delete(seeded.id)).rejects.toThrow(/cannot be deleted/);
+    await svc.delete(seeded.id);
+    await expect(svc.getById(seeded.id)).rejects.toThrow(/not found/);
   });
 
   it('deletes a custom template', async () => {

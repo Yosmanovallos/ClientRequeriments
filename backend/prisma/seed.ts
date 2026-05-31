@@ -142,34 +142,11 @@ async function main() {
     }
   }
 
-  // ── 7. Sample requests ─────────────────────────────────────────────────────
-  const samples = [
-    { ref: 'CBLPBR-627', type: 'fix_issue',   title: '2 claims marked as BLG only but aren\'t', status: 'IN REVIEW',      priority: 'High',    projectId: PROJECT_BLG_ID },
-    { ref: 'CBLPBR-625', type: 'new_page',    title: 'CLJ Task Productivity',                   status: 'IN DEVELOPMENT', priority: 'Highest', projectId: PROJECT_BLG_ID },
-    { ref: 'CBLPBR-622', type: 'new_feature', title: 'DON Confirmed Dual Reps',                 status: 'IN DEVELOPMENT', priority: 'Highest', projectId: PROJECT_STONE_ID },
-    { ref: 'CBLPBR-610', type: 'fix_issue',   title: 'Diseases in visual are duplicated',        status: 'CUSTOMER FEEDBACK', priority: 'Highest', projectId: PROJECT_BLG_ID },
-  ] as const;
-
-  for (const s of samples) {
-    await prisma.request.upsert({
-      where:  { reference: s.ref },
-      update: {},
-      create: {
-        id: crypto.randomUUID(), clientId: DEMO_CLIENT_ID, projectId: s.projectId,
-        reference: s.ref, requestType: s.type, title: s.title,
-        status: s.status, priority: s.priority, payload: '{}',
-        history: { create: { toStatus: 'NEW', source: 'portal', actor: 'seed' } },
-      },
-    });
-  }
-
   console.log('Seed complete:');
   console.log('  Client:   Bell Legal Group (CBLPBR)');
   console.log('  Projects: BLG Power BI, Stonebridge Analytics');
   console.log('  Users:    super@provana.com | admin@blg.com | agent@blg.com | client@blg.com | pending@blg.com');
   console.log('  Password: Demo1234! (all demo users)');
-  console.log('  Templates: 5 standard forms × 2 projects');
-  console.log('  Requests: 4 sample requests');
 }
 
 main()

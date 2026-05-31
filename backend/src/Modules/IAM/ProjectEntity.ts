@@ -41,7 +41,7 @@ export interface ProjectMember {
 
 /** Project + counts shown in the Control Panel project list. */
 export interface ProjectSummary extends Project {
-  memberCount:   number;
-  requestCount:  number;
-  enabledForms:  number;
+  memberCount:  number;
+  requestCount: number;
+  formCount:    number;
 }
