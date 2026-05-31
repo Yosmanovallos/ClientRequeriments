@@ -3,6 +3,25 @@ import { useApp } from '../context/AppContext';
 import { auth } from '../auth';
 import ProvanaLogo from '../components/brand/ProvanaLogo';
 
+function Card({ title, sub, error, children }: { title: string; sub?: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+          <ProvanaLogo height={34} />
+        </div>
+        <h2 style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, color: 'var(--purple)', margin: '16px 0 4px' }}>
+          {title}
+        </h2>
+        {sub && <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--muted)', margin: '0 0 18px' }}>{sub}</p>}
+        {!sub && <div style={{ marginBottom: 18 }} />}
+        {error && <div className="login-error">{error}</div>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
 type AuthMode = 'login' | 'register' | 'registered' | 'forgot' | 'forgot-sent' | 'reset' | 'reset-done';
 
 function validateEmail(v: string) {
@@ -92,24 +111,6 @@ export default function ViewLogin() {
     setMode('reset-done');
   };
 
-  // ── Shared card shell ──────────────────────────────────────────────────────
-  const Card = ({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) => (
-    <div className="login-page">
-      <div className="login-card">
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
-          <ProvanaLogo height={34} />
-        </div>
-        <h2 style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, color: 'var(--purple)', margin: '16px 0 4px' }}>
-          {title}
-        </h2>
-        {sub && <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--muted)', margin: '0 0 18px' }}>{sub}</p>}
-        {!sub && <div style={{ marginBottom: 18 }} />}
-        {error && <div className="login-error">{error}</div>}
-        {children}
-      </div>
-    </div>
-  );
-
   // ── registered ────────────────────────────────────────────────────────────
   if (mode === 'registered') return (
     <div className="login-page">
@@ -161,7 +162,7 @@ export default function ViewLogin() {
 
   // ── register ──────────────────────────────────────────────────────────────
   if (mode === 'register' && auth.isLocal) return (
-    <Card title="Create account">
+    <Card title="Create account" error={error}>
       <form onSubmit={handleRegister} noValidate>
         <div className="field">
           <label className="field-label">Full name <span className="req-star">*</span></label>
@@ -197,7 +198,7 @@ export default function ViewLogin() {
 
   // ── forgot ────────────────────────────────────────────────────────────────
   if (mode === 'forgot') return (
-    <Card title="Reset password" sub="Enter your email and we'll send a reset link.">
+    <Card title="Reset password" sub="Enter your email and we'll send a reset link." error={error}>
       <form onSubmit={handleForgot} noValidate>
         <div className="field">
           <label className="field-label">Email <span className="req-star">*</span></label>
@@ -221,7 +222,7 @@ export default function ViewLogin() {
 
   // ── reset (arrived via email link) ────────────────────────────────────────
   if (mode === 'reset') return (
-    <Card title="Set new password" sub="Choose a strong password for your account.">
+    <Card title="Set new password" sub="Choose a strong password for your account." error={error}>
       <form onSubmit={handleReset} noValidate>
         <div className="field">
           <label className="field-label">New password <span className="req-star">*</span></label>
