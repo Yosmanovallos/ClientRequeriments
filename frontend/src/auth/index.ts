@@ -111,6 +111,33 @@ export const auth = {
     return { error: null };
   },
 
+  async forgotPassword(email: string): Promise<{ error: string | null }> {
+    if (!IS_LOCAL) return { error: 'Password reset only available in local mode' };
+    const res = await fetch('/api/auth/forgot-password', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { detail?: string };
+      return { error: body.detail ?? 'Request failed' };
+    }
+    return { error: null };
+  },
+
+  async resetPassword(token: string, password: string): Promise<{ error: string | null }> {
+    const res = await fetch('/api/auth/reset-password', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ token, password }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { detail?: string };
+      return { error: body.detail ?? 'Reset failed' };
+    }
+    return { error: null };
+  },
+
   async signOut(): Promise<void> {
     if (supabase) await supabase.auth.signOut();
     clearToken();

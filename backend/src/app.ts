@@ -145,10 +145,12 @@ async function main() {
     registerAuthEndpoints(app, {
       prisma,
       userRepo,
-      jwt: container.localJwt,
+      jwt:             container.localJwt,
+      notifier:        container.notifier,
       defaultClientId: process.env['DEMO_FALLBACK_CLIENT_ID'] ?? '00000000-0000-0000-0000-000000000001',
+      frontendUrl:     process.env['FRONTEND_URL'] ?? 'http://localhost:5173',
     });
-    app.log.info('Local JWT auth endpoints registered → POST /auth/register, POST /auth/login');
+    app.log.info('Local JWT auth endpoints registered → POST /auth/register, POST /auth/login, POST /auth/forgot-password, POST /auth/reset-password');
   }
 
   // Sync endpoints (inbound webhooks) — each registered only when its credentials are set,

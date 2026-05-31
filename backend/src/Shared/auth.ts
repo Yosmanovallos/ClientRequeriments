@@ -32,6 +32,7 @@ export function authMiddleware(identity: IIdentityProvider, userRepo?: IUserRepo
   const PUBLIC_PATHS = new Set([
       '/health', '/favicon.ico',
       '/auth/login', '/auth/register',
+      '/auth/forgot-password', '/auth/reset-password',
       '/webhooks/github', '/webhooks/azuredevops',
     ]);
 
