@@ -11,8 +11,9 @@
  *   pending@blg.com         → PENDING      (no project yet)
  */
 import { PrismaClient } from '@prisma/client';
-import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
+import { scrypt, randomBytes } from 'node:crypto';
 import { promisify } from 'node:util';
+import { STANDARD_TEMPLATES } from '../src/Modules/FormTemplates/standardTemplates.js';
 
 const prisma        = new PrismaClient();
 const scryptAsync   = promisify(scrypt);
@@ -104,104 +105,20 @@ async function main() {
     }
   }
 
-  // ── 5. Standard form templates ─────────────────────────────────────────────
-  const STANDARD_TEMPLATES = [
-    {
-      slug: 'new-report', name: 'Create New Report',
-      description: 'Request development of a completely new report.',
-      fieldSchema: JSON.stringify([
-        { name: 'reportName',   label: 'Report Name',         type: 'text',     required: true,  sortOrder: 10 },
-        { name: 'filevineId',   label: 'Related Filevine ID', type: 'text',     required: false, sortOrder: 40 },
-        { name: 'impactsExistingAutomation', label: 'Impacts Existing Automation', type: 'select', required: true, sortOrder: 50, options: ['Yes','No','Unsure','N/A'] },
-        { name: 'overallGoal',  label: 'Overall Report Goal', type: 'textarea', required: true,  sortOrder: 60 },
-        { name: 'audience',     label: 'Report Audience',     type: 'textarea', required: true,  sortOrder: 70 },
-        { name: 'priority',     label: 'Priority',            type: 'select',   required: true,  sortOrder: 90, options: ['Highest','High','Medium','Low','Lowest'] },
-        { name: 'dueDate',      label: 'Requested Due Date',  type: 'date',     required: false, sortOrder: 92 },
-        { name: 'notes',        label: 'Additional Notes',    type: 'textarea', required: false, sortOrder: 95 },
-      ]),
-    },
-    {
-      slug: 'new-page', name: 'Request New Page',
-      description: 'Add a new page to an existing report.',
-      fieldSchema: JSON.stringify([
-        { name: 'existingReport', label: 'Existing Report Name', type: 'text',     required: true,  sortOrder: 10 },
-        { name: 'pageName',       label: 'Page Name',            type: 'text',     required: true,  sortOrder: 20 },
-        { name: 'filevineId',     label: 'Related Filevine ID',  type: 'text',     required: false, sortOrder: 40 },
-        { name: 'impactsExistingAutomation', label: 'Impacts Existing Automation', type: 'select', required: true, sortOrder: 50, options: ['Yes','No','Unsure','N/A'] },
-        { name: 'pageGoal',       label: 'Page Goal',            type: 'textarea', required: true,  sortOrder: 60 },
-        { name: 'audience',       label: 'Report Audience',      type: 'textarea', required: true,  sortOrder: 70 },
-        { name: 'fields',         label: 'Fields and Sections',  type: 'textarea', required: true,  sortOrder: 80 },
-        { name: 'priority',       label: 'Priority',             type: 'select',   required: true,  sortOrder: 90, options: ['Highest','High','Medium','Low','Lowest'] },
-        { name: 'dueDate',        label: 'Requested Due Date',   type: 'date',     required: false, sortOrder: 92 },
-        { name: 'notes',          label: 'Additional Notes',     type: 'textarea', required: false, sortOrder: 95 },
-      ]),
-    },
-    {
-      slug: 'new-feature', name: 'New Feature on a Page/Report',
-      description: 'Request improvements or new features for a specific page.',
-      fieldSchema: JSON.stringify([
-        { name: 'existingReport',     label: 'Existing Report Name', type: 'text',     required: true,  sortOrder: 10 },
-        { name: 'existingPage',       label: 'Existing Page Name',   type: 'text',     required: true,  sortOrder: 20 },
-        { name: 'featureDescription', label: 'Feature Description',  type: 'text',     required: true,  sortOrder: 30 },
-        { name: 'filevineId',         label: 'Related Filevine ID',  type: 'text',     required: false, sortOrder: 40 },
-        { name: 'impactsExistingAutomation', label: 'Impacts Existing Automation', type: 'select', required: true, sortOrder: 50, options: ['Yes','No','Unsure','N/A'] },
-        { name: 'goal',               label: 'Goal of the Feature',  type: 'textarea', required: true,  sortOrder: 60 },
-        { name: 'audience',           label: 'Report Audience',      type: 'textarea', required: true,  sortOrder: 70 },
-        { name: 'fields',             label: 'Fields and Sections',  type: 'textarea', required: false, sortOrder: 80 },
-        { name: 'priority',           label: 'Priority',             type: 'select',   required: true,  sortOrder: 90, options: ['Highest','High','Medium','Low','Lowest'] },
-        { name: 'dueDate',            label: 'Requested Due Date',   type: 'date',     required: false, sortOrder: 92 },
-        { name: 'notes',              label: 'Additional Notes',     type: 'textarea', required: false, sortOrder: 95 },
-      ]),
-    },
-    {
-      slug: 'fix-issue', name: 'Fix Issue on a Report/Page',
-      description: 'Report a bug or issue with an existing report/page.',
-      fieldSchema: JSON.stringify([
-        { name: 'summary',        label: 'Request Summary',      type: 'text',     required: true,  sortOrder: 10 },
-        { name: 'existingReport', label: 'Existing Report Name', type: 'text',     required: true,  sortOrder: 20 },
-        { name: 'existingPage',   label: 'Existing Page Name',   type: 'text',     required: true,  sortOrder: 30 },
-        { name: 'filevineId',     label: 'Related Filevine ID',  type: 'text',     required: false, sortOrder: 40 },
-        { name: 'impactsExistingAutomation', label: 'Impacts Existing Automation', type: 'select', required: true, sortOrder: 50, options: ['Yes','No','Unsure','N/A'] },
-        { name: 'issueDetails',   label: 'Issue Details',        type: 'textarea', required: true,  sortOrder: 60 },
-        { name: 'priority',       label: 'Priority',             type: 'select',   required: true,  sortOrder: 90, options: ['Highest','High','Medium','Low','Lowest'] },
-        { name: 'dueDate',        label: 'Requested Due Date',   type: 'date',     required: false, sortOrder: 92 },
-        { name: 'notes',          label: 'Additional Notes',     type: 'textarea', required: false, sortOrder: 95 },
-      ]),
-    },
-    {
-      slug: 'view-request', name: 'View Request',
-      description: 'Request the creation, editing, or deletion of a data warehouse view.',
-      fieldSchema: JSON.stringify([
-        { name: 'typeOfRequest', label: 'Type of Request',               type: 'select',   required: true,  sortOrder: 10, options: ['New View','Edit Existing View','Delete View','Other'] },
-        { name: 'viewName',      label: 'Name of the View',              type: 'text',     required: true,  sortOrder: 20 },
-        { name: 'filevineId',    label: 'Related Filevine ID',           type: 'text',     required: false, sortOrder: 40 },
-        { name: 'impactsExistingAutomation', label: 'Impacts Existing Automation', type: 'select', required: true, sortOrder: 50, options: ['Yes','No','Unsure','N/A'] },
-        { name: 'details',       label: 'Details',                       type: 'textarea', required: true,  sortOrder: 60 },
-        { name: 'goal',          label: 'Goal of the Request',           type: 'textarea', required: true,  sortOrder: 70 },
-        { name: 'fields',        label: 'Fields and Sections',           type: 'textarea', required: true,  sortOrder: 80 },
-        { name: 'conditions',    label: 'Conditions of Inclusion/Exclusion', type: 'textarea', required: true, sortOrder: 85 },
-        { name: 'priority',      label: 'Priority',                      type: 'select',   required: true,  sortOrder: 90, options: ['Highest','High','Medium','Low','Lowest'] },
-        { name: 'dueDate',       label: 'Requested Due Date',            type: 'date',     required: false, sortOrder: 92 },
-        { name: 'notes',         label: 'Additional Notes',              type: 'textarea', required: false, sortOrder: 95 },
-      ]),
-    },
-  ];
-
+  // ── 5. Standard form templates — always upsert fieldSchema so re-seeding ────
+  //       picks up any field changes made in standardTemplates.ts
   const templateIds: Record<string, string> = {};
   for (const tpl of STANDARD_TEMPLATES) {
-    const existing = await prisma.formTemplate.findFirst({
-      where: { clientId: DEMO_CLIENT_ID, slug: tpl.slug },
+    const fieldSchemaJson = JSON.stringify(tpl.fieldSchema);
+    const row = await prisma.formTemplate.upsert({
+      where:  { clientId_slug: { clientId: DEMO_CLIENT_ID, slug: tpl.slug } },
+      update: { name: tpl.name, description: tpl.description, fieldSchema: fieldSchemaJson },
+      create: {
+        clientId: DEMO_CLIENT_ID, name: tpl.name, slug: tpl.slug,
+        description: tpl.description, fieldSchema: fieldSchemaJson, isStandard: true,
+      },
     });
-    let id: string;
-    if (existing) {
-      id = existing.id;
-    } else {
-      const created = await prisma.formTemplate.create({
-        data: { clientId: DEMO_CLIENT_ID, name: tpl.name, slug: tpl.slug, description: tpl.description, fieldSchema: tpl.fieldSchema, isStandard: true },
-      });
-      id = created.id;
-    }
-    templateIds[tpl.slug] = id;
+    templateIds[tpl.slug] = row.id;
   }
 
   // ── 6. Project form configs (all templates enabled for both projects) ──────
