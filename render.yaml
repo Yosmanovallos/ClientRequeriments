@@ -1,0 +1,98 @@
+# Render service spec — https://render.com/docs/yaml-spec
+# Commit this file at the repo root. Render auto-detects it on the first deploy.
+# Free plan: Docker web service sleeps after 15 min idle (cold start ~30-50s).
+# Upgrade to "Starter" ($7/mo) for always-on.
+
+services:
+  - type: web
+    name: clientrequirements-backend
+    runtime: docker
+    plan: free                # change to "starter" for always-on
+    region: oregon            # pick the region closest to your DB
+    rootDir: backend
+    dockerfilePath: backend/Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true          # deploys on every push to main
+    branch: main
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: LOG_LEVEL
+        value: info
+      - key: CORS_ORIGIN
+        sync: false            # set after frontend deploy, e.g. https://your-app.vercel.app
+
+      # Database — point at Neon / Supabase / Azure SQL
+      - key: DATABASE_URL
+        sync: false            # MUST set in Render dashboard → Environment → Secret
+
+      # Provider switches — set the ones you're using; leave others blank to fall back to local
+      - key: AUTH_PROVIDER
+        value: local            # change to "supabase" once SUPABASE_JWT_SECRET is set
+      - key: STORAGE_PROVIDER
+        value: local            # change to "supabase" once SUPABASE_STORAGE_BUCKET is set
+      - key: TICKETS_PROVIDER
+        value: local            # change to "github" or "azuredevops" when ready
+      - key: NOTIFY_PROVIDER
+        value: local            # change to "composite" with SMTP + TEAMS_WEBHOOK_URL
+
+      # Auth (Supabase) — only used when AUTH_PROVIDER=supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DEMO_FALLBACK_CLIENT_ID
+        sync: false
+
+      # Storage (Supabase)
+      - key: SUPABASE_STORAGE_BUCKET
+        value: attachments
+
+      # Tickets (GitHub)
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_OWNER
+        sync: false
+      - key: GITHUB_REPO
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+
+      # Tickets (Azure DevOps)
+      - key: ADO_ORG
+        sync: false
+      - key: ADO_PROJECT
+        sync: false
+      - key: ADO_PAT
+        sync: false
+      - key: ADO_WORK_ITEM_TYPE
+        value: Task
+      - key: ADO_WEBHOOK_USER
+        sync: false
+      - key: ADO_WEBHOOK_PASS
+        sync: false
+
+      # Notifications (SMTP — Outlook smtp.office365.com:587 with app password)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: NOTIFY_FROM
+        sync: false
+
+      # Notifications (Teams Workflow webhook)
+      - key: TEAMS_WEBHOOK_URL
+        sync: false
+
+      # OR Slack
+      - key: SLACK_WEBHOOK_URL
+        sync: false

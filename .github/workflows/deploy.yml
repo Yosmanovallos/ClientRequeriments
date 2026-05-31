@@ -1,0 +1,51 @@
+# Continuous deployment — runs after CI passes on main.
+#
+# This workflow does NOT push code to Render/Vercel directly. Both platforms
+# auto-deploy on every push to main (see render.yaml + Vercel project settings).
+# This workflow's job is to run a post-deploy smoke test against the live URLs
+# so we know the deploy didn't break anything.
+name: Deploy smoke
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  smoke:
+    name: Post-deploy health checks
+    runs-on: ubuntu-latest
+    # Only run if CI succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Wait for Render + Vercel to redeploy
+        run: sleep 90
+
+      - name: Backend /health responds 200
+        run: |
+          set -e
+          STATUS=$(curl -sf -o /tmp/h.json -w '%{http_code}' "$BACKEND_URL/health")
+          echo "HTTP $STATUS"
+          cat /tmp/h.json
+          test "$STATUS" = "200"
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+
+      - name: Frontend serves index.html
+        run: |
+          set -e
+          STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "$FRONTEND_URL/")
+          echo "HTTP $STATUS"
+          test "$STATUS" = "200"
+        env:
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+
+      - name: Frontend → Backend API proxy works
+        run: |
+          set -e
+          STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "$FRONTEND_URL/api/health")
+          echo "HTTP $STATUS"
+          test "$STATUS" = "200"
+        env:
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}

@@ -1,0 +1,234 @@
+// Prisma schema — portable between Postgres (free MVP) and SQL Server (Phase 9 Microsoft migration).
+// Key portability rules (Section 2.4 of the blueprint):
+//   - payload fields stored as String @db.Text (not Json) → works as nvarchar(max) in SQL Server
+//   - No Postgres-only operators in queries (no jsonb_*, no ILIKE, etc.)
+//   - Switch datasource provider from "postgresql" to "sqlserver" + re-run migrate for Azure SQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  prefix    String   @unique @db.VarChar(16)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  requests      Request[]
+  refCounters   ClientRefCounter[]
+  projects      Project[]
+  users         PortalUser[]
+  formTemplates FormTemplate[]
+
+  @@map("clients")
+}
+
+// PortalUser — application-side user. Linked to an IIdentityProvider record via authUserId
+// (e.g. Supabase auth.users.id or Entra object id).
+//
+// Role + isActive are NOT stored in the JWT — they're enforced server-side. The auth
+// middleware loads the role from this table on every request after token verification.
+// `role = null` means PENDING — user registered but a SuperAdmin hasn't assigned them
+// a role or project membership yet. Pending users hit the /pending-approval screen.
+model PortalUser {
+  id          String   @id @default(uuid()) @db.Uuid
+  clientId    String   @map("client_id") @db.Uuid
+  authUserId  String   @unique @map("auth_user_id")
+  email       String   @db.VarChar(255)
+  displayName String   @map("display_name") @db.VarChar(128)
+  role         String?  @db.VarChar(32)                  // SUPER_ADMIN | ADMIN | AGENT | CLIENT | null=PENDING
+  passwordHash String?  @map("password_hash") @db.VarChar(512) // only used by local-jwt adapter; null for Supabase/Entra users
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt        @map("updated_at")
+
+  client      Client          @relation(fields: [clientId], references: [id])
+  memberships ProjectMember[]
+
+  @@index([clientId])
+  @@map("portal_users")
+}
+
+// Project = a workspace within a Client (tenant). Tickets are scoped to projects so e.g.
+// "BLG - Power BI" agents can't see "Stonebridge" tickets and vice versa.
+model Project {
+  id          String   @id @default(uuid()) @db.Uuid
+  clientId    String   @map("client_id") @db.Uuid
+  name        String   @db.VarChar(128)
+  slug        String   @db.VarChar(64)
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt        @map("updated_at")
+
+  client      Client              @relation(fields: [clientId], references: [id])
+  members     ProjectMember[]
+  requests    Request[]
+  formConfigs ProjectFormConfig[]
+
+  @@unique([clientId, slug])
+  @@index([clientId])
+  @@map("projects")
+}
+
+// Project membership — a portal user is granted access to a specific project.
+// SuperAdmins implicitly have access to every project (enforced in PermissionGuard,
+// not via membership rows, so we don't need to insert a row per project per superadmin).
+model ProjectMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id")    @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project    @relation(fields: [projectId], references: [id])
+  user    PortalUser @relation(fields: [userId],    references: [id])
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+// FormTemplate = a reusable request-form definition. fieldSchema is JSON text (portable
+// to SQL Server nvarchar(max)) — see FormFieldDef in the FormTemplates module for shape.
+// isStandard=true marks system-seeded templates (5 of them) that match the legacy
+// hardcoded forms; can be enabled per-project but not deleted.
+model FormTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  clientId    String   @map("client_id") @db.Uuid
+  name        String   @db.VarChar(128)
+  slug        String   @db.VarChar(64)
+  description String?  @db.Text
+  isStandard  Boolean  @default(false) @map("is_standard")
+  fieldSchema String   @map("field_schema") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  client   Client              @relation(fields: [clientId], references: [id])
+  projects ProjectFormConfig[]
+  requests Request[]
+
+  @@unique([clientId, slug])
+  @@index([clientId])
+  @@map("form_templates")
+}
+
+// Which form templates are enabled for which project. SuperAdmin/Admin toggles
+// isEnabled via /projects/:id/forms; sortOrder controls display order on the picker.
+model ProjectFormConfig {
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @map("project_id")  @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  isEnabled  Boolean  @default(true) @map("is_enabled")
+  sortOrder  Int      @default(0)   @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  project  Project      @relation(fields: [projectId],  references: [id])
+  template FormTemplate @relation(fields: [templateId], references: [id])
+
+  @@unique([projectId, templateId])
+  @@map("project_form_configs")
+}
+
+model Request {
+  id             String    @id @default(uuid()) @db.Uuid
+  clientId       String    @map("client_id") @db.Uuid
+  projectId      String?   @map("project_id") @db.Uuid           // nullable for backward-compat with pre-migration data
+  templateId     String?   @map("template_id") @db.Uuid          // which FormTemplate produced this request (null for legacy)
+  reference      String    @unique @db.VarChar(20)
+  requestType    String    @map("request_type") @db.VarChar(64)
+  title          String
+  status         String    @default("NEW") @db.VarChar(32)
+  priority       String    @db.VarChar(16)
+  dueDate        DateTime? @map("due_date")
+  payload        String    @db.Text          // JSON string — portable to SQL Server nvarchar(max)
+  idempotencyKey String?   @unique @map("idempotency_key") @db.VarChar(64)
+  createdBy      String?   @map("created_by") @db.VarChar(255)          // email of submitter; null for legacy requests
+  adoWorkItemId  String?   @map("ado_work_item_id") @db.VarChar(64)
+  adoWorkItemUrl String?   @map("ado_work_item_url")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  client      Client          @relation(fields: [clientId], references: [id])
+  project     Project?        @relation(fields: [projectId], references: [id])
+  template    FormTemplate?   @relation(fields: [templateId], references: [id])
+  history     StatusHistory[]
+  comments    Comment[]
+  outbox      OutboxEvent[]
+  attachments Attachment[]
+
+  @@index([projectId])
+  @@map("requests")
+}
+
+model StatusHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  requestId  String   @map("request_id") @db.Uuid
+  fromStatus String?  @map("from_status") @db.VarChar(32)
+  toStatus   String   @map("to_status") @db.VarChar(32)
+  changedAt  DateTime @default(now()) @map("changed_at")
+  source     String   @db.VarChar(32)
+  actor      String?  @db.VarChar(128)
+
+  request Request @relation(fields: [requestId], references: [id])
+
+  @@map("status_history")
+}
+
+model Comment {
+  id         String   @id @default(uuid()) @db.Uuid
+  requestId  String   @map("request_id") @db.Uuid
+  body       String   @db.Text
+  author     String?  @db.VarChar(128)
+  visibility String   @default("public") @db.VarChar(16)
+  source     String   @default("PORTAL") @db.VarChar(16)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id])
+
+  @@map("comments")
+}
+
+model Attachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  requestId   String   @map("request_id") @db.Uuid
+  clientId    String   @map("client_id") @db.Uuid       // denormalised — fast tenant check w/o joining requests
+  fileName    String   @map("file_name") @db.VarChar(255)
+  contentType String   @map("content_type") @db.VarChar(128)
+  size        Int                                       // bytes
+  storageKey  String   @unique @map("storage_key") @db.VarChar(512)
+  uploadedBy  String   @map("uploaded_by") @db.VarChar(255)
+  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+
+  request Request @relation(fields: [requestId], references: [id])
+
+  @@index([requestId])
+  @@map("attachments")
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  requestId   String    @map("request_id") @db.Uuid
+  eventType   String    @map("event_type") @db.VarChar(64)
+  payload     String    @db.Text          // JSON string
+  processedAt DateTime? @map("processed_at")
+  error       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id])
+
+  @@map("outbox_events")
+}
+
+model ClientRefCounter {
+  clientId  String @id @map("client_id") @db.Uuid
+  lastValue Int    @default(0) @map("last_value")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("client_ref_counters")
+}

@@ -69,4 +69,4 @@ function ViewRequests({ go }) {
   );
 }
 
-Object.assign(window, { ViewRequests, FormCrumbs });
+Object.assign(window, { ViewRequests, FormCrumbs, PortalBanner });

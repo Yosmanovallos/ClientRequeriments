@@ -16,8 +16,33 @@ function ViewFormNewPage({ go }) {
   const [files, setFiles] = React.useState([]);
   const fileInput = React.useRef(null);
 
+  const [pageGoal, setPageGoal] = React.useState('');
+  const [audience, setAudience] = React.useState('');
+  const [fields, setFields] = React.useState('');
+  const [visualsDetails, setVisualsDetails] = React.useState('');
+  const [filters, setFilters] = React.useState('');
+  const [slicers, setSlicers] = React.useState('');
+  const [notes, setNotes] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
+  const [submitMsg, setSubmitMsg] = React.useState('');
+
   const toggleEnv = (k) => setEnvs((s) => ({ ...s, [k]: !s[k] }));
   const addFiles = (list) => setFiles((f) => [...f, ...Array.from(list).map((x) => x.name)]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setSubmitting(true); setSubmitMsg('');
+    const { data, error } = await db.createRequest('new_page',
+      existingReport ? existingReport + ' — ' + pageName : pageName || 'New Page',
+      priority, due || null, {
+        existingReport, pageName, filevineId: filevine, impactsExistingAutomation: impact,
+        pageGoal, audience, fields, visualsRequested: visuals, visualsDetails, filters, slicers,
+        environments: Object.keys(envs).filter(k => envs[k]), notes,
+      }
+    );
+    setSubmitting(false);
+    if (error) setSubmitMsg('Error: ' + error.message);
+    else { setSubmitMsg('Request ' + (data.reference || '') + ' submitted!'); setTimeout(() => go('requests'), 1800); }
+  };
 
   const VISUALS = [
     "Bar / Column Chart", "Line Chart", "Pie Chart", "Donut Chart",
@@ -54,7 +79,7 @@ function ViewFormNewPage({ go }) {
         </button>
 
         {accordion && (
-          <form className="reqform" onSubmit={(e) => { e.preventDefault(); go("requests"); }}>
+          <form className="reqform" onSubmit={handleSubmit}>
             <div className="note-box">
               <strong>NOTE:</strong> If the requested information for any of the following fields is included in an attached spreadsheet or document, please use the available fields in this form to specify its exact location within the file (e.g., sheet name, section, or page).
             </div>
@@ -93,15 +118,15 @@ function ViewFormNewPage({ go }) {
             </Field>
 
             <Field label="Page Goal" required sub="Describe the primary objective or question this new page aims to address, please offer as much details and context as you can.">
-              <RTE variant="full" />
+              <RTE variant="full" onChange={setPageGoal} />
             </Field>
 
             <Field label="Report Audience" required sub="List the names or department of the intended audience for this report.">
-              <RTE variant="full" />
+              <RTE variant="full" onChange={setAudience} />
             </Field>
 
             <Field label="Fields and Sections (Filevine or Other Sources)" required sub="List the specific fields and their corresponding sections from Filevine or any other data sources to be included on this page. Please describe any new calculated fields or required metrics.">
-              <RTE variant="full" />
+              <RTE variant="full" onChange={setFields} />
             </Field>
 
             <Field label="Visuals Requested" required sub="Indicate the types of visualizations preferred for data representation on this page.">

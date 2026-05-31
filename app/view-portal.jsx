@@ -123,4 +123,4 @@ function ViewPortal({ go }) {
   );
 }
 
-Object.assign(window, { ViewPortal });
+Object.assign(window, { ViewPortal, TopNav, Breadcrumbs });

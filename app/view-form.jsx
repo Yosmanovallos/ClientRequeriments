@@ -13,8 +13,8 @@ function Field({ label, required, sub, children }) {
   );
 }
 
-// Rich text toolbar — `set` is the toolbar layout variant
-function RTE({ variant = "full", placeholder }) {
+// Rich text toolbar — variant controls button set; onChange fires with HTML on blur
+function RTE({ variant = "full", placeholder, onChange }) {
   const ref = useRef(null);
   const [focused, setFocused] = useState(false);
   const exec = (cmd) => (e) => { e.preventDefault(); try { document.execCommand(cmd); } catch (_) {} ref.current && ref.current.focus(); };
@@ -60,7 +60,8 @@ function RTE({ variant = "full", placeholder }) {
       </div>
       <div className="rte-area" contentEditable suppressContentEditableWarning ref={ref}
         data-ph={placeholder || ""}
-        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} />
+        onFocus={() => setFocused(true)}
+        onBlur={(e) => { setFocused(false); if (onChange) onChange(e.target.innerHTML); }} />
     </div>
   );
 }
@@ -92,9 +93,30 @@ function ViewForm({ go }) {
   const [dragging, setDragging] = useState(false);
   const [files, setFiles] = useState([]);
   const fileInput = useRef(null);
+  const [overallGoal, setOverallGoal] = useState('');
+  const [audience, setAudience] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMsg, setSubmitMsg] = useState('');
 
   const toggleEnv = (k) => setEnvs((s) => ({ ...s, [k]: !s[k] }));
   const addFiles = (list) => setFiles((f) => [...f, ...Array.from(list).map((x) => x.name)]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true); setSubmitMsg('');
+    const { data, error } = await db.createRequest('new_report',
+      reportName || 'New Report', priority, due || null, {
+        filevineId: filevine, impactsExistingAutomation: impact,
+        overallGoal, audience,
+        environments: Object.keys(envs).filter(k => envs[k]),
+        numberOfPages: pages, notes,
+      }
+    );
+    setSubmitting(false);
+    if (error) { setSubmitMsg('Error: ' + error.message); }
+    else { setSubmitMsg('Request ' + (data.reference || '') + ' submitted!'); setTimeout(() => go('requests'), 1800); }
+  };
 
   return (
     <div className="view view-form">
@@ -124,7 +146,7 @@ function ViewForm({ go }) {
         </button>
 
         {accordion && (
-          <form className="reqform" onSubmit={(e) => { e.preventDefault(); go("requests"); }}>
+          <form className="reqform" onSubmit={handleSubmit}>
             <div className="note-box">
               <strong>NOTE:</strong> If the requested information for any of the following fields is included in an attached spreadsheet or document, please use the available fields in this form to specify its exact location within the file (e.g., sheet name, section, or page).
             </div>
@@ -159,11 +181,11 @@ function ViewForm({ go }) {
             </Field>
 
             <Field label="Overall Report Goal" required sub="Describe the primary objective or questions the entire report aims to address, please offer as much details and context as you can.">
-              <RTE variant="full" />
+              <RTE variant="full" onChange={setOverallGoal} />
             </Field>
 
             <Field label="Report Audience" required sub="List the names or department of the intended audience for this report.">
-              <RTE variant="full" />
+              <RTE variant="full" onChange={setAudience} />
             </Field>
 
             <Field label="Environment Selection" required sub="Select the environment where the report should be deployed.">
@@ -220,7 +242,7 @@ function ViewForm({ go }) {
             </Field>
 
             <Field label="Additional Notes" sub="Provide any other relevant information or special instructions, images or links from recordings.">
-              <RTE variant="alt" />
+              <RTE variant="alt" onChange={setNotes} />
             </Field>
 
             <Field label="Attachment" sub="Provide the documentation necessary to develop.">
@@ -241,9 +263,10 @@ function ViewForm({ go }) {
             </Field>
 
             <div className="form-actions">
-              <button type="submit" className="btn-send">Send</button>
-              <button type="button" className="btn-cancel" onClick={() => go("requests")}>Cancel</button>
+              <button type="submit" className="btn-send" disabled={submitting}>{submitting ? 'Sending…' : 'Send'}</button>
+              <button type="button" className="btn-cancel" onClick={() => go('requests')}>Cancel</button>
             </div>
+            {submitMsg && <div className={submitMsg.startsWith('Error') ? 'submit-error' : 'submit-success'}>{submitMsg}</div>}
           </form>
         )}
         <footer className="powered">Powered by <span className="pw-mark" /> Provana Service Management</footer>
@@ -252,4 +275,4 @@ function ViewForm({ go }) {
   );
 }
 
-Object.assign(window, { ViewForm });
+Object.assign(window, { ViewForm, Req, Field, RTE, SelectBox });
