@@ -80,20 +80,18 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const handleDelete = async (t: FormTemplate) => {
     if (!window.confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
     setDeletingId(t.id);
-    const { error: err } = await formTemplatesApi.remove(t.id);
+    const { error: err } = await formTemplatesApi.removeFromProject(selectedProjId, t.id);
     setDeletingId(null);
     if (err) { setSaveMsg('Error deleting: ' + err.message); return; }
-    // Refresh both standard templates and project configs
+    // Refresh both lists
     const [tplRes, cfgRes] = await Promise.all([
       formTemplatesApi.listAll(),
-      selectedProjId ? formTemplatesApi.listProjectConfigs(selectedProjId) : Promise.resolve({ data: null }),
+      formTemplatesApi.listProjectConfigs(selectedProjId),
     ]);
     setStandardTpls((tplRes.data?.data ?? []).filter(tp => tp.isStandard));
-    if (cfgRes.data) {
-      const configs = cfgRes.data.data ?? [];
-      setProjConfigs(configs);
-      setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
-    }
+    const configs = cfgRes.data?.data ?? [];
+    setProjConfigs(configs);
+    setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
   };
 
   if (loading) return <LoadingSpinner />;

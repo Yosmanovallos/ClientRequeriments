@@ -45,6 +45,16 @@ export class FormTemplateService {
     await this.deps.templates.delete(id);
   }
 
+  /** Remove a template from one project only. Deletes the template record if no projects remain. */
+  async removeFromProject(projectId: string, templateId: string): Promise<void> {
+    const template = await this.getById(templateId);
+    await this.deps.templates.removeProjectConfig(projectId, templateId);
+    const remaining = await this.deps.templates.countConfigsForTemplate(templateId);
+    if (remaining === 0 && !template.isStandard) {
+      await this.deps.templates.delete(templateId);
+    }
+  }
+
   // Project configuration
   async listProjectConfigs(projectId: string) {
     return this.deps.templates.listProjectConfigs(projectId);

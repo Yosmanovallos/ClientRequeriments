@@ -74,4 +74,7 @@ export const formTemplatesApi = {
   remove(id: string) {
     return api.delete<void>(`/form-templates/${id}`);
   },
+  removeFromProject(projectId: string, templateId: string) {
+    return api.delete<void>(`/projects/${projectId}/forms/${templateId}`);
+  },
 };

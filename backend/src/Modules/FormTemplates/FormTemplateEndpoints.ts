@@ -70,6 +70,16 @@ export function registerFormTemplateEndpoints(
 
   // ── Per-project enabling ───────────────────────────────────────────────
 
+  // DELETE /projects/:id/forms/:templateId — remove template from this project only
+  app.delete<{ Params: { id: string; templateId: string } }>('/projects/:id/forms/:templateId', async (req, reply) => {
+    requirePermission(req.user, 'formtemplates.configure');
+    const project = await projectRepo.findById(req.params.id);
+    if (!project) return reply.status(404).send({ title: 'NOT_FOUND', status: 404, detail: 'Project not found' });
+    requireProjectAccess(req.user, project.id, project.clientId);
+    await svc.removeFromProject(project.id, req.params.templateId);
+    return reply.status(204).send();
+  });
+
   // GET /projects/:id/forms/configs — all configs with embedded template (Admin use; shows enabled + disabled)
   app.get<{ Params: { id: string } }>('/projects/:id/forms/configs', async (req, reply) => {
     requirePermission(req.user, 'formtemplates.configure');

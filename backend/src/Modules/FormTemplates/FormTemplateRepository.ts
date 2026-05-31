@@ -13,6 +13,10 @@ export interface IFormTemplateRepository {
   listProjectConfigs(projectId: string): Promise<ProjectFormConfig[]>;
   /** Replace the project's full configuration in one transaction (upsert per entry). */
   setProjectConfigs(projectId: string, configs: Array<{ templateId: string; isEnabled: boolean; sortOrder?: number }>): Promise<void>;
+  /** Remove a single project↔template link without touching the template record. */
+  removeProjectConfig(projectId: string, templateId: string): Promise<void>;
+  /** Count how many projects still reference this template. */
+  countConfigsForTemplate(templateId: string): Promise<number>;
   /** List enabled templates for a project, in sortOrder. */
   listEnabledTemplates(projectId: string): Promise<FormTemplate[]>;
 }
@@ -93,6 +97,19 @@ export class InMemoryFormTemplateRepository implements IFormTemplateRepository {
         });
       }
     }
+  }
+
+  async removeProjectConfig(projectId: string, templateId: string): Promise<void> {
+    for (const [cid, c] of this.configs) {
+      if (c.projectId === projectId && c.templateId === templateId) {
+        this.configs.delete(cid);
+        return;
+      }
+    }
+  }
+
+  async countConfigsForTemplate(templateId: string): Promise<number> {
+    return [...this.configs.values()].filter(c => c.templateId === templateId).length;
   }
 
   async listEnabledTemplates(projectId: string): Promise<FormTemplate[]> {
@@ -181,6 +198,14 @@ export class PrismaFormTemplateRepository implements IFormTemplateRepository {
         });
       }
     });
+  }
+
+  async removeProjectConfig(projectId: string, templateId: string): Promise<void> {
+    await this.prisma.projectFormConfig.deleteMany({ where: { projectId, templateId } });
+  }
+
+  async countConfigsForTemplate(templateId: string): Promise<number> {
+    return this.prisma.projectFormConfig.count({ where: { templateId } });
   }
 
   async listEnabledTemplates(projectId: string): Promise<FormTemplate[]> {
