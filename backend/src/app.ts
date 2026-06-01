@@ -138,7 +138,7 @@ async function main() {
   }));
 
   // Module routes
-  registerRequestsEndpoints(app, container, requestsRepo, orgRepo);
+  registerRequestsEndpoints(app, container, requestsRepo, orgRepo, templateRepo);
   registerCommentsEndpoints(app, container, commentsRepo, requestsRepo);
   registerAttachmentsEndpoints(app, container, attachmentsRepo, requestsRepo);
   registerProjectEndpoints(app, projectRepo);

@@ -179,3 +179,76 @@ describe('Standard templates seed', () => {
     }
   });
 });
+
+describe('Conditional rule validation', () => {
+  it('accepts a template with valid conditions', async () => {
+    const { svc } = makeSvc();
+    const fields: FormFieldDef[] = [
+      { name: 'worked', label: 'Worked before?', type: 'radio', required: true, options: ['Yes','No'], sortOrder: 0 },
+      {
+        name: 'vendor', label: 'Vendor Name', type: 'text', required: false, sortOrder: 1,
+        defaultVisible: false,
+        conditions: [{
+          when: [{ fieldName: 'worked', operator: 'eq', value: 'Yes' }],
+          visibility: 'show', requirement: 'require',
+        }],
+      },
+    ];
+    const t = await svc.create({ clientId: CLIENT_A, name: 'Cond', slug: 'cond', fieldSchema: fields });
+    expect(t.fieldSchema[1]?.conditions).toHaveLength(1);
+  });
+
+  it('rejects conditions referencing non-existent fields', async () => {
+    const { svc } = makeSvc();
+    const fields: FormFieldDef[] = [
+      { name: 'a', label: 'A', type: 'text', required: false, sortOrder: 0 },
+      {
+        name: 'b', label: 'B', type: 'text', required: false, sortOrder: 1,
+        conditions: [{ when: [{ fieldName: 'nonexistent', operator: 'eq', value: 'x' }], visibility: 'show' }],
+      },
+    ];
+    await expect(svc.create({ clientId: CLIENT_A, name: 'X', slug: 'x', fieldSchema: fields }))
+      .rejects.toThrow(/unknown field/);
+  });
+
+  it('rejects self-referencing conditions', async () => {
+    const { svc } = makeSvc();
+    const fields: FormFieldDef[] = [
+      {
+        name: 'a', label: 'A', type: 'text', required: false, sortOrder: 0,
+        conditions: [{ when: [{ fieldName: 'a', operator: 'notEmpty', value: '' }], visibility: 'hide' }],
+      },
+    ];
+    await expect(svc.create({ clientId: CLIENT_A, name: 'X', slug: 'x2', fieldSchema: fields }))
+      .rejects.toThrow(/itself/);
+  });
+
+  it('rejects circular dependencies', async () => {
+    const { svc } = makeSvc();
+    const fields: FormFieldDef[] = [
+      {
+        name: 'a', label: 'A', type: 'text', required: false, sortOrder: 0,
+        conditions: [{ when: [{ fieldName: 'b', operator: 'eq', value: 'x' }], visibility: 'show' }],
+      },
+      {
+        name: 'b', label: 'B', type: 'text', required: false, sortOrder: 1,
+        conditions: [{ when: [{ fieldName: 'a', operator: 'eq', value: 'y' }], visibility: 'show' }],
+      },
+    ];
+    await expect(svc.create({ clientId: CLIENT_A, name: 'X', slug: 'x3', fieldSchema: fields }))
+      .rejects.toThrow(/circular/);
+  });
+
+  it('rejects a rule with neither visibility nor requirement', async () => {
+    const { svc } = makeSvc();
+    const fields: FormFieldDef[] = [
+      { name: 'a', label: 'A', type: 'text', required: false, sortOrder: 0 },
+      {
+        name: 'b', label: 'B', type: 'text', required: false, sortOrder: 1,
+        conditions: [{ when: [{ fieldName: 'a', operator: 'eq', value: 'x' }] } as never],
+      },
+    ];
+    await expect(svc.create({ clientId: CLIENT_A, name: 'X', slug: 'x4', fieldSchema: fields }))
+      .rejects.toThrow(/visibility or requirement/);
+  });
+});

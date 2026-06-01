@@ -3,6 +3,9 @@ import type { IRequestsRepository, ListRequestsFilters }      from './RequestsRe
 import type { ITicketSystem }                                  from '../../Platform/Ports/ITicketSystem';
 import type { INotifier }                                      from '../../Platform/Ports/INotifier';
 import type { IClock }                                         from '../../Platform/Ports/IClock';
+import type { IFormTemplateRepository }                        from '../FormTemplates/FormTemplateRepository';
+import type { FormFieldDef }                                   from '../FormTemplates/FormTemplate';
+import { evaluateConditions }                                  from '../FormTemplates/conditionEngine';
 import { Errors }                                              from '../../Shared/errors';
 
 // Demo client settings — Phase 3 loads these from the DB clients table.
@@ -11,10 +14,11 @@ const CLIENT_PREFIX: Record<string, string> = {
 };
 
 interface Deps {
-  repo:    IRequestsRepository;
-  tickets: ITicketSystem;
-  notifier: INotifier;
-  clock:   IClock;
+  repo:          IRequestsRepository;
+  tickets:       ITicketSystem;
+  notifier:      INotifier;
+  clock:         IClock;
+  formTemplates?: IFormTemplateRepository; // optional — skips condition validation when absent
 }
 
 export interface RequestSummary extends Omit<Request, 'payload'> {
@@ -29,6 +33,14 @@ export class RequestsService {
     if (cmd.idempotencyKey) {
       const existing = await this.deps.repo.findByIdempotencyKey(cmd.idempotencyKey);
       if (existing) return this.toSummary(existing);
+    }
+
+    // Condition-aware payload validation (when template is known)
+    if (cmd.templateId && this.deps.formTemplates) {
+      const tpl = await this.deps.formTemplates.findById(cmd.templateId);
+      if (tpl && tpl.clientId === cmd.clientId) {
+        this.validatePayloadWithConditions(tpl.fieldSchema, cmd.payload as Record<string, unknown>);
+      }
     }
 
     const prefix    = CLIENT_PREFIX[cmd.clientId] ?? 'REQ';
@@ -66,13 +78,8 @@ export class RequestsService {
   /**
    * Apply a status change from an external system (e.g. GitHub webhook).
    *
-   * - Idempotent: if the request is already at `newStatus`, this is a no-op (no history row written).
-   *   Important because GitHub may redeliver webhooks and our in-memory delivery-id dedup
-   *   resets on process restart.
-   * - Skips tenant check on purpose — webhooks are not user-authenticated; HMAC verification
-   *   in the Sync endpoint is the trust boundary.
-   * - Returns `true` if the request was found (regardless of whether the status changed),
-   *   `false` if the externalId doesn't match any portal request (silently ignored upstream).
+   * - Idempotent: if the request is already at `newStatus`, this is a no-op.
+   * - Skips tenant check — webhooks are authenticated by HMAC, not by user session.
    */
   async applyExternalStatus(
     externalId: string,
@@ -89,14 +96,49 @@ export class RequestsService {
 
   // ── private helpers ──────────────────────────────────────────────────────
 
+  /**
+   * Server-side condition-aware payload validation.
+   * Runs the same engine as the frontend so the backend is the authoritative source of truth.
+   * Hidden fields must not carry values (tamper protection).
+   * Visible required fields must have non-empty values.
+   */
+  private validatePayloadWithConditions(
+    schema:  FormFieldDef[],
+    payload: Record<string, unknown>,
+  ): void {
+    const states  = evaluateConditions(schema, payload);
+    const errors: string[] = [];
+
+    for (const field of schema) {
+      const state = states.get(field.name) ?? { visible: true, required: field.required };
+
+      if (!state.visible) {
+        // Reject non-empty values for hidden fields (prevents tampered submissions)
+        const val = payload[field.name];
+        if (val !== undefined && val !== null && val !== '') {
+          throw Errors.badRequest(
+            `Field "${field.label}" is hidden by conditional logic and must not have a value.`,
+          );
+        }
+        continue;
+      }
+
+      if (state.required && field.type !== 'attachment') {
+        const val = payload[field.name];
+        if (val === undefined || val === null || val === '') {
+          errors.push(`"${field.label}" is required.`);
+        }
+      }
+    }
+
+    if (errors.length > 0) throw Errors.badRequest(errors.join(' '));
+  }
+
   private async createTicketAsync(req: Request, requesterEmail: string): Promise<void> {
     const payload = JSON.parse(req.payload) as Record<string, string>;
     const ref = await this.deps.tickets.create({
       title:            `[${req.reference}] ${req.title}`,
       body:             this.buildTicketBody(req, payload),
-      // labels intentionally omitted — the adapter derives standard labels from
-      // requestType + priority. Pass `labels` only when callers need EXTRA labels
-      // beyond the adapter's defaults.
       priority:         req.priority,
       requestReference: req.reference,
       requestType:      req.requestType,

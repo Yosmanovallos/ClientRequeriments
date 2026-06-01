@@ -17,15 +17,33 @@ export type FormFieldType =
   | 'number'
   | 'attachment'; // files collected separately and uploaded after request creation
 
+export type ConditionOperator =
+  | 'eq' | 'neq' | 'contains' | 'notContains' | 'empty' | 'notEmpty';
+
+export interface ConditionClause {
+  fieldName: string;
+  operator:  ConditionOperator;
+  value:     string;
+}
+
+export interface ConditionalRule {
+  when:         ConditionClause[];
+  logic?:       'AND' | 'OR';
+  visibility?:  'show' | 'hide';
+  requirement?: 'require' | 'optional';
+}
+
 export interface FormFieldDef {
-  name:         string;        // stable field ID — payload key + ADO field name
-  label:        string;
-  type:         FormFieldType;
-  required:     boolean;
-  placeholder?: string;
-  helpText?:    string;        // gray hint text shown below the input
-  options?:     string[];      // for select / radio / checkbox
-  sortOrder:    number;
+  name:            string;        // stable field ID — payload key + ADO field name
+  label:           string;
+  type:            FormFieldType;
+  required:        boolean;
+  placeholder?:    string;
+  helpText?:       string;        // gray hint text shown below the input
+  options?:        string[];      // for select / radio / checkbox
+  sortOrder:       number;
+  defaultVisible?: boolean;       // true if omitted
+  conditions?:     ConditionalRule[];
 }
 
 export interface FormTemplate {

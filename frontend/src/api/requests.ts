@@ -50,6 +50,7 @@ export interface CreateRequestBody {
   idempotencyKey?: string | null;
   projectId?:      string | null;
   organizationId?: string | null;
+  templateId?:     string | null;
 }
 
 export const requestsApi = {

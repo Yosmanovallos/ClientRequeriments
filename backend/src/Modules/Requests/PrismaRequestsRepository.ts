@@ -28,6 +28,7 @@ export class PrismaRequestsRepository implements IRequestsRepository {
           clientId:       cmd.clientId,
           projectId:      cmd.projectId,
           organizationId: cmd.organizationId,
+          templateId:     cmd.templateId ?? null,
           reference:      cmd.reference,
           requestType:    cmd.requestType,
           title:          cmd.title,
@@ -154,6 +155,7 @@ export class PrismaRequestsRepository implements IRequestsRepository {
 
   private toDomain = (r: {
     id: string; clientId: string; projectId: string | null; organizationId?: string | null;
+    templateId?: string | null;
     reference: string; requestType: string; title: string;
     status: string; priority: string; dueDate: Date | null; payload: string;
     idempotencyKey: string | null; createdBy: string | null;
@@ -164,6 +166,7 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     clientId:       r.clientId,
     projectId:      r.projectId,
     organizationId: r.organizationId ?? null,
+    templateId:     r.templateId ?? null,
     reference:      r.reference,
     requestType:    r.requestType as RequestType,
     title:          r.title,

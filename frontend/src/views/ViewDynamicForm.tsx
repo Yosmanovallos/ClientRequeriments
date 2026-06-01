@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { requestsApi } from '../api/requests';
 import { attachmentsApi } from '../api/attachments';
 import { orgsApi, type Organization } from '../api/admin';
 import type { FormTemplate } from '../api/formTemplates';
+import { evaluateConditions } from '../lib/conditionEngine';
 import DynamicField from '../components/DynamicField';
 import TopNav from '../components/layout/TopNav';
 import PortalBanner from '../components/layout/PortalBanner';
@@ -34,12 +35,20 @@ export default function ViewDynamicForm({ template }: Props) {
     orgsApi.list(activeProject.id).then(({ data }) => {
       const list = data?.data ?? [];
       setOrgs(list);
-      // Auto-select if user only belongs to one org
       if (list.length === 1) setOrganizationId(list[0].id);
     });
   }, [activeProject?.id]);
 
-  const fields = [...template.fieldSchema].sort((a, b) => a.sortOrder - b.sortOrder);
+  const fields = useMemo(
+    () => [...template.fieldSchema].sort((a, b) => a.sortOrder - b.sortOrder),
+    [template.fieldSchema],
+  );
+
+  // Evaluate conditions on every form value change — drives visibility + required state
+  const fieldStates = useMemo(
+    () => evaluateConditions(fields, values),
+    [fields, values],
+  );
 
   const handleChange = (name: string, value: string) =>
     setValues(prev => ({ ...prev, [name]: value }));
@@ -51,9 +60,12 @@ export default function ViewDynamicForm({ template }: Props) {
     e.preventDefault();
     if (!activeProject) return;
 
-    // Validate required rich-text fields (they may only contain empty <p></p>)
+    // Validate visible required fields (hidden fields are skipped)
     for (const f of fields) {
-      if (f.required && f.type === 'richtext') {
+      const state = fieldStates.get(f.name) ?? { visible: true, required: f.required };
+      if (!state.visible) continue;
+
+      if (state.required && f.type === 'richtext') {
         const html = values[f.name] ?? '';
         const stripped = html.replace(/<[^>]*>/g, '').trim();
         if (!stripped) {
@@ -61,11 +73,11 @@ export default function ViewDynamicForm({ template }: Props) {
           return;
         }
       }
-      if (f.required && f.type === 'radio' && !values[f.name]) {
+      if (state.required && f.type === 'radio' && !values[f.name]) {
         setSubmitMsg(`Error: "${f.label}" is required.`);
         return;
       }
-      if (f.required && f.type === 'checkbox' && !values[f.name]) {
+      if (state.required && f.type === 'checkbox' && !values[f.name]) {
         setSubmitMsg(`Error: Please select at least one option for "${f.label}".`);
         return;
       }
@@ -83,11 +95,12 @@ export default function ViewDynamicForm({ template }: Props) {
     const firstTextField = fields.find(f => f.type === 'text');
     const title = (firstTextField ? values[firstTextField.name] : '') || template.name;
 
-    // Exclude attachment fields from the payload (uploaded separately)
+    // Only include visible non-attachment fields in the payload
     const payloadValues = Object.fromEntries(
       Object.entries(values).filter(([k]) => {
         const fd = fields.find(f => f.name === k);
-        return fd?.type !== 'attachment';
+        const state = fieldStates.get(k);
+        return fd?.type !== 'attachment' && (state?.visible ?? true);
       }),
     );
 
@@ -98,7 +111,8 @@ export default function ViewDynamicForm({ template }: Props) {
       dueDate:        dueDate || null,
       projectId:      activeProject.id,
       organizationId: organizationId || null,
-      payload:        { ...payloadValues, templateId: template.id },
+      templateId:     template.id,
+      payload:        payloadValues,
     });
 
     if (error) {
@@ -156,7 +170,6 @@ export default function ViewDynamicForm({ template }: Props) {
           <p className="req-sub">{template.description}</p>
         )}
 
-        {/* NOTE box matching the reference design */}
         <div className="note-box">
           <strong>NOTE:</strong> If the requested information for any of the following fields is
           included in an attached spreadsheet or document, please use the available fields in
@@ -181,7 +194,7 @@ export default function ViewDynamicForm({ template }: Props) {
           </div>
         </div>
 
-        {/* Organization picker — visible to all roles; CLIENT sees only their own orgs */}
+        {/* Organization picker */}
         <div className="field">
           <label className="field-label">Share with organization</label>
           <select
@@ -201,16 +214,20 @@ export default function ViewDynamicForm({ template }: Props) {
         </div>
 
         <form className="reqform" onSubmit={handleSubmit}>
-          {fields.map(field => (
-            <DynamicField
-              key={field.name}
-              field={field}
-              value={values[field.name] ?? ''}
-              onChange={handleChange}
-              onFilesChange={handleFilesChange}
-              pendingFiles={pendingFiles[field.name] ?? []}
-            />
-          ))}
+          {fields.map(field => {
+            const state = fieldStates.get(field.name) ?? { visible: true, required: field.required };
+            if (!state.visible) return null;
+            return (
+              <DynamicField
+                key={field.name}
+                field={{ ...field, required: state.required }}
+                value={values[field.name] ?? ''}
+                onChange={handleChange}
+                onFilesChange={handleFilesChange}
+                pendingFiles={pendingFiles[field.name] ?? []}
+              />
+            );
+          })}
 
           <div className="form-actions">
             <button type="submit" className="btn-send" disabled={submitting}>

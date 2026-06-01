@@ -16,6 +16,7 @@ export interface Request {
   clientId:        string;
   projectId:       string | null;    // project this request belongs to
   organizationId:  string | null;    // optional org scope for ticket visibility
+  templateId:      string | null;    // which FormTemplate produced this request
   reference:       string;           // e.g. CBLPBR-629
   requestType:     RequestType;
   title:           string;
@@ -45,6 +46,7 @@ export interface CreateRequestCmd {
   clientId:       string;
   projectId:      string | null;
   organizationId: string | null;
+  templateId?:    string | null;    // used for server-side condition validation
   requestType:    RequestType;
   title:          string;
   priority:       string;

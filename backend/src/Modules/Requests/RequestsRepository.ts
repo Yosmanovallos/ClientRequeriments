@@ -39,6 +39,7 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
       clientId:       cmd.clientId,
       projectId:      cmd.projectId,
       organizationId: cmd.organizationId,
+      templateId:     cmd.templateId ?? null,
       reference:      cmd.reference,
       requestType:    cmd.requestType,
       title:          cmd.title,

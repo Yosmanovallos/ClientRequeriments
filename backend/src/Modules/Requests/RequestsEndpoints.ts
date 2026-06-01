@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Container }       from '../../Platform/AdapterRegistration.js';
 import type { IRequestsRepository, ListRequestsFilters } from './RequestsRepository.js';
 import type { IOrganizationRepository } from '../Organizations/OrganizationRepository.js';
+import type { IFormTemplateRepository } from '../FormTemplates/FormTemplateRepository.js';
 import { RequestsService }      from './RequestsService.js';
 import { CreateRequestSchema, ListRequestsSchema } from './RequestsValidators.js';
 import { requirePermission, requireProjectAccess } from '../IAM/PermissionGuard.js';
@@ -24,12 +25,14 @@ export function registerRequestsEndpoints(
   container: Container,
   repo: IRequestsRepository,
   orgRepo?: IOrganizationRepository,
+  templateRepo?: IFormTemplateRepository,
 ): void {
   const svc = new RequestsService({
     repo,
-    tickets:  container.tickets,
-    notifier: container.notifier,
-    clock:    container.clock,
+    tickets:      container.tickets,
+    notifier:     container.notifier,
+    clock:        container.clock,
+    formTemplates: templateRepo,
   });
 
   // POST /requests — create a new request
@@ -66,6 +69,7 @@ export function registerRequestsEndpoints(
       clientId:       req.user.clientId,
       projectId:      input.projectId ?? null,
       organizationId: input.organizationId ?? null,
+      templateId:     input.templateId ?? null,
       requestType:    input.requestType,
       title:          input.title,
       priority:       input.priority,

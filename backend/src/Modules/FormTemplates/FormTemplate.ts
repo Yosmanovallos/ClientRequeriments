@@ -20,20 +20,45 @@ export type FormFieldType =
   | 'number'      // numeric input
   | 'attachment'; // file drag-and-drop (handled separately; not stored in payload)
 
+export type ConditionOperator =
+  | 'eq'           // exact match
+  | 'neq'          // not equal
+  | 'contains'     // value is one of comma-separated selections (checkbox / multi)
+  | 'notContains'  // value is NOT in selections
+  | 'empty'        // field has no value
+  | 'notEmpty';    // field has any value
+
+export interface ConditionClause {
+  fieldName: string;
+  operator:  ConditionOperator;
+  value:     string; // ignored for 'empty' / 'notEmpty'
+}
+
+export interface ConditionalRule {
+  when:         ConditionClause[];         // 1–10 clauses
+  logic?:       'AND' | 'OR';             // default 'AND'
+  visibility?:  'show' | 'hide';          // omit → no effect on visibility
+  requirement?: 'require' | 'optional';   // omit → no effect on required state
+}
+
 export interface FormFieldDef {
   /** Stable field identifier — used as the payload key and ADO/Power Automate field name. */
-  name:         string;
+  name:            string;
   /** Human-readable label shown above the field. */
-  label:        string;
-  type:         FormFieldType;
-  required:     boolean;
-  placeholder?: string;
+  label:           string;
+  type:            FormFieldType;
+  required:        boolean;
+  placeholder?:    string;
   /** Gray helper text shown below the input (matches service-desk hint lines). */
-  helpText?:    string;
+  helpText?:       string;
   /** Allowed values for select / radio / checkbox field types. */
-  options?:     string[];
+  options?:        string[];
   /** Controls rendering order on the form. */
-  sortOrder:    number;
+  sortOrder:       number;
+  /** Whether the field is visible by default before any conditions fire. Default: true. */
+  defaultVisible?: boolean;
+  /** Conditional rules — empty/absent means always show. */
+  conditions?:     ConditionalRule[];
 }
 
 export interface FormTemplate {

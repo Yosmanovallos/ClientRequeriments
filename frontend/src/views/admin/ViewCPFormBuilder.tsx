@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { formTemplatesApi, type FormFieldDef, type FormTemplate } from '../../api/formTemplates';
+import { formTemplatesApi, type FormFieldDef, type FormTemplate, type ConditionalRule, type ConditionClause } from '../../api/formTemplates';
 import { api } from '../../api/client';
 import type { CPSection } from './ViewControlPanel';
 
@@ -16,14 +16,46 @@ const FIELD_TYPES = [
 ] as const;
 type FieldType = typeof FIELD_TYPES[number];
 
+const OPERATORS_FOR_TYPE: Record<string, { value: string; label: string }[]> = {
+  text:     [{ value: 'eq', label: '= equals' }, { value: 'neq', label: '≠ not equals' }, { value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  textarea: [{ value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  richtext: [{ value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  email:    [{ value: 'eq', label: '= equals' }, { value: 'neq', label: '≠ not equals' }, { value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  number:   [{ value: 'eq', label: '= equals' }, { value: 'neq', label: '≠ not equals' }, { value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  select:   [{ value: 'eq', label: '= equals' }, { value: 'neq', label: '≠ not equals' }, { value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  radio:    [{ value: 'eq', label: '= equals' }, { value: 'neq', label: '≠ not equals' }, { value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  checkbox: [{ value: 'contains', label: 'includes' }, { value: 'notContains', label: 'does not include' }, { value: 'empty', label: 'none selected' }, { value: 'notEmpty', label: 'any selected' }],
+  date:     [{ value: 'eq', label: '= equals' }, { value: 'neq', label: '≠ not equals' }, { value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+  attachment: [{ value: 'empty', label: 'is empty' }, { value: 'notEmpty', label: 'is not empty' }],
+};
+
+function needsValueInput(operator: string) {
+  return operator === 'eq' || operator === 'neq' || operator === 'contains' || operator === 'notContains';
+}
+
+interface ConditionClauseDraft {
+  fieldName: string;
+  operator:  string;
+  value:     string;
+}
+
+interface ConditionalRuleDraft {
+  when:         ConditionClauseDraft[];
+  logic:        'AND' | 'OR';
+  visibility?:  'show' | 'hide';
+  requirement?: 'require' | 'optional';
+}
+
 interface FieldDraft {
-  name:        string;
-  label:       string;
-  type:        FieldType;
-  required:    boolean;
-  placeholder: string;
-  helpText:    string;
-  options:     string; // comma-separated; used for select/radio/checkbox
+  name:           string;
+  label:          string;
+  type:           FieldType;
+  required:       boolean;
+  placeholder:    string;
+  helpText:       string;
+  options:        string; // comma-separated; used for select/radio/checkbox
+  defaultVisible: boolean;
+  conditions:     ConditionalRuleDraft[];
 }
 
 function autoSlug(s: string) {
@@ -35,26 +67,282 @@ function autoId(label: string) {
 }
 
 function blankField(): FieldDraft {
-  return { name: '', label: '', type: 'text', required: false, placeholder: '', helpText: '', options: '' };
+  return {
+    name: '', label: '', type: 'text', required: false,
+    placeholder: '', helpText: '', options: '',
+    defaultVisible: true, conditions: [],
+  };
+}
+
+function blankClause(): ConditionClauseDraft {
+  return { fieldName: '', operator: 'eq', value: '' };
+}
+
+function blankRule(): ConditionalRuleDraft {
+  return { when: [blankClause()], logic: 'AND' };
 }
 
 function templateToFieldDrafts(tpl: FormTemplate): FieldDraft[] {
   return [...tpl.fieldSchema]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map(f => ({
-      name:        f.name,
-      label:       f.label,
-      type:        f.type as FieldType,
-      required:    f.required,
-      placeholder: f.placeholder ?? '',
-      helpText:    f.helpText ?? '',
-      options:     f.options?.join(', ') ?? '',
+      name:           f.name,
+      label:          f.label,
+      type:           f.type as FieldType,
+      required:       f.required,
+      placeholder:    f.placeholder ?? '',
+      helpText:       f.helpText ?? '',
+      options:        f.options?.join(', ') ?? '',
+      defaultVisible: f.defaultVisible ?? true,
+      conditions:     (f.conditions ?? []).map(r => ({
+        when:         r.when.map(c => ({ fieldName: c.fieldName, operator: c.operator, value: c.value })),
+        logic:        (r.logic ?? 'AND') as 'AND' | 'OR',
+        visibility:   r.visibility,
+        requirement:  r.requirement,
+      })),
     }));
 }
 
 function needsOptions(type: FieldType) {
   return type === 'select' || type === 'radio' || type === 'checkbox';
 }
+
+// ── Condition Rule Editor ────────────────────────────────────────────────────
+
+interface RuleEditorProps {
+  rule:          ConditionalRuleDraft;
+  ruleIndex:     number;
+  allFields:     FieldDraft[];
+  fieldIndex:    number;
+  onChange:      (rule: ConditionalRuleDraft) => void;
+  onRemove:      () => void;
+}
+
+function RuleEditor({ rule, allFields, fieldIndex, onChange, onRemove }: RuleEditorProps) {
+  const otherFields = allFields.filter((_, i) => i !== fieldIndex);
+
+  const updateClause = (ci: number, patch: Partial<ConditionClauseDraft>) => {
+    const updated = rule.when.map((c, i) => i === ci ? { ...c, ...patch } : c);
+    onChange({ ...rule, when: updated });
+  };
+
+  const addClause = () => onChange({ ...rule, when: [...rule.when, blankClause()] });
+
+  const removeClause = (ci: number) =>
+    onChange({ ...rule, when: rule.when.filter((_, i) => i !== ci) });
+
+  const getTriggerOptions = (fieldName: string): string[] => {
+    const f = allFields.find(f => f.name === fieldName);
+    if (!f || !needsOptions(f.type)) return [];
+    return f.options.split(',').map(o => o.trim()).filter(Boolean);
+  };
+
+  const getTriggerType = (fieldName: string): string => {
+    return allFields.find(f => f.name === fieldName)?.type ?? 'text';
+  };
+
+  return (
+    <div style={{ border: '1px solid var(--line-2)', borderRadius: 6, padding: 12, marginBottom: 8, background: '#fafafa' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)' }}>When…</span>
+        <button onClick={onRemove} style={{ border: 'none', background: 'none', color: '#a30000', cursor: 'pointer', fontSize: 12, padding: 0 }}>
+          Remove rule
+        </button>
+      </div>
+
+      {rule.when.map((clause, ci) => {
+        const triggerType    = getTriggerType(clause.fieldName);
+        const triggerOptions = getTriggerOptions(clause.fieldName);
+        const operatorList   = OPERATORS_FOR_TYPE[triggerType] ?? OPERATORS_FOR_TYPE['text']!;
+        const showValue      = needsValueInput(clause.operator);
+
+        return (
+          <div key={ci} style={{ marginBottom: 8 }}>
+            {ci > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <button
+                  onClick={() => onChange({ ...rule, logic: 'AND' })}
+                  style={{ padding: '2px 8px', border: '1px solid var(--line-2)', borderRadius: 4, fontSize: 11, cursor: 'pointer', background: rule.logic === 'AND' ? 'var(--accent)' : '#fff', color: rule.logic === 'AND' ? '#fff' : 'var(--ink)' }}
+                >
+                  AND
+                </button>
+                <button
+                  onClick={() => onChange({ ...rule, logic: 'OR' })}
+                  style={{ padding: '2px 8px', border: '1px solid var(--line-2)', borderRadius: 4, fontSize: 11, cursor: 'pointer', background: rule.logic === 'OR' ? 'var(--accent)' : '#fff', color: rule.logic === 'OR' ? '#fff' : 'var(--ink)' }}
+                >
+                  OR
+                </button>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                className="txt"
+                value={clause.fieldName}
+                onChange={e => updateClause(ci, { fieldName: e.target.value, operator: 'eq', value: '' })}
+                style={{ height: 34, fontSize: 12, flex: '1 1 130px', minWidth: 0 }}
+              >
+                <option value="">— pick field —</option>
+                {otherFields.map(f => (
+                  <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                ))}
+              </select>
+
+              <select
+                className="txt"
+                value={clause.operator}
+                onChange={e => updateClause(ci, { operator: e.target.value, value: '' })}
+                style={{ height: 34, fontSize: 12, flex: '0 0 130px' }}
+                disabled={!clause.fieldName}
+              >
+                {operatorList.map(op => (
+                  <option key={op.value} value={op.value}>{op.label}</option>
+                ))}
+              </select>
+
+              {showValue && (
+                triggerOptions.length > 0 ? (
+                  <select
+                    className="txt"
+                    value={clause.value}
+                    onChange={e => updateClause(ci, { value: e.target.value })}
+                    style={{ height: 34, fontSize: 12, flex: '1 1 100px', minWidth: 0 }}
+                  >
+                    <option value="">— pick value —</option>
+                    {triggerOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    className="txt"
+                    value={clause.value}
+                    onChange={e => updateClause(ci, { value: e.target.value })}
+                    placeholder="value"
+                    style={{ height: 34, fontSize: 12, flex: '1 1 100px', minWidth: 0 }}
+                  />
+                )
+              )}
+
+              {rule.when.length > 1 && (
+                <button onClick={() => removeClause(ci)} style={{ border: 'none', background: 'none', color: '#a30000', cursor: 'pointer', fontSize: 13, padding: '0 4px', flexShrink: 0 }}>×</button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      <button onClick={addClause} style={{ fontSize: 11, color: 'var(--accent)', border: 'none', background: 'none', cursor: 'pointer', padding: '2px 0', marginBottom: 10 }}>
+        + Add clause
+      </button>
+
+      <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 10, marginTop: 4, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div className="field" style={{ margin: 0, flex: '1 1 140px' }}>
+          <label className="field-label" style={{ fontSize: 11 }}>Visibility effect</label>
+          <select
+            className="txt"
+            value={rule.visibility ?? ''}
+            onChange={e => onChange({ ...rule, visibility: (e.target.value || undefined) as 'show' | 'hide' | undefined })}
+            style={{ height: 32, fontSize: 12 }}
+          >
+            <option value="">— no change —</option>
+            <option value="show">Show this field</option>
+            <option value="hide">Hide this field</option>
+          </select>
+        </div>
+        <div className="field" style={{ margin: 0, flex: '1 1 140px' }}>
+          <label className="field-label" style={{ fontSize: 11 }}>Required effect</label>
+          <select
+            className="txt"
+            value={rule.requirement ?? ''}
+            onChange={e => onChange({ ...rule, requirement: (e.target.value || undefined) as 'require' | 'optional' | undefined })}
+            style={{ height: 32, fontSize: 12 }}
+          >
+            <option value="">— no change —</option>
+            <option value="require">Make required</option>
+            <option value="optional">Make optional</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Conditions Panel ─────────────────────────────────────────────────────────
+
+interface ConditionsPanelProps {
+  fieldIndex:  number;
+  draft:       FieldDraft;
+  allFields:   FieldDraft[];
+  onChange:    (patch: Partial<FieldDraft>) => void;
+}
+
+function ConditionsPanel({ fieldIndex, draft, allFields, onChange }: ConditionsPanelProps) {
+  const [open, setOpen] = useState(false);
+  const count = draft.conditions.length;
+
+  const updateRule = (ri: number, rule: ConditionalRuleDraft) =>
+    onChange({ conditions: draft.conditions.map((r, i) => i === ri ? rule : r) });
+
+  const removeRule = (ri: number) =>
+    onChange({ conditions: draft.conditions.filter((_, i) => i !== ri) });
+
+  const addRule = () => onChange({ conditions: [...draft.conditions, blankRule()] });
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line-2)', marginTop: 10, paddingTop: 10 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+      >
+        <span style={{ transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>▶</span>
+        Conditions
+        {count > 0 && (
+          <span style={{ marginLeft: 4, fontSize: 11, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 7px' }}>{count}</span>
+        )}
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              Default visibility
+              <select
+                className="txt"
+                value={draft.defaultVisible ? 'true' : 'false'}
+                onChange={e => onChange({ defaultVisible: e.target.value === 'true' })}
+                style={{ height: 30, fontSize: 12, width: 180 }}
+              >
+                <option value="true">Visible (hide on condition)</option>
+                <option value="false">Hidden (show on condition)</option>
+              </select>
+            </label>
+          </div>
+
+          {draft.conditions.map((rule, ri) => (
+            <RuleEditor
+              key={ri}
+              rule={rule}
+              ruleIndex={ri}
+              allFields={allFields}
+              fieldIndex={fieldIndex}
+              onChange={r => updateRule(ri, r)}
+              onRemove={() => removeRule(ri)}
+            />
+          ))}
+
+          <button
+            type="button"
+            onClick={addRule}
+            style={{ fontSize: 12, color: 'var(--accent)', border: '1px dashed var(--accent)', borderRadius: 4, background: 'none', cursor: 'pointer', padding: '4px 12px', marginTop: 4 }}
+          >
+            + Add rule
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Form Builder ────────────────────────────────────────────────────────
 
 export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate }: Props) {
   const isEditing = !!editTemplate;
@@ -91,6 +379,19 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
       if (needsOptions(f.type)) {
         def.options = f.options.split(',').map(o => o.trim()).filter(Boolean);
       }
+      if (!f.defaultVisible) def.defaultVisible = false;
+      const validRules: ConditionalRule[] = f.conditions
+        .filter(r => r.when.some(c => c.fieldName && c.operator) && (r.visibility !== undefined || r.requirement !== undefined))
+        .map(r => ({
+          when: r.when
+            .filter(c => c.fieldName && c.operator)
+            .map(c => ({ fieldName: c.fieldName, operator: c.operator as ConditionClause['operator'], value: c.value })),
+          logic: r.logic,
+          ...(r.visibility  ? { visibility:  r.visibility  } : {}),
+          ...(r.requirement ? { requirement: r.requirement } : {}),
+        }))
+        .filter(r => r.when.length > 0);
+      if (validRules.length > 0) def.conditions = validRules;
       return def;
     });
 
@@ -249,6 +550,16 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
               <input type="checkbox" checked={f.required} onChange={e => updateField(i, { required: e.target.checked })} />
               Required field
             </label>
+
+            {/* Conditions panel */}
+            {fields.length > 1 && (
+              <ConditionsPanel
+                fieldIndex={i}
+                draft={f}
+                allFields={fields}
+                onChange={patch => updateField(i, patch)}
+              />
+            )}
           </div>
         ))}
       </div>
