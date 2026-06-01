@@ -4,6 +4,7 @@ import type { IAttachmentsRepository } from './AttachmentsRepository.js';
 import type { IRequestsRepository }    from '../Requests/RequestsRepository.js';
 import { AttachmentsService }   from './AttachmentsService.js';
 import { MAX_UPLOAD_BYTES }     from './Attachment.js';
+import { validateUpload }       from './validateMime.js';
 import { Errors }               from '../../Shared/errors.js';
 
 export function registerAttachmentsEndpoints(
@@ -31,6 +32,10 @@ export function registerAttachmentsEndpoints(
     if (!file) throw Errors.badRequest('No file uploaded (use multipart/form-data with field "file")');
 
     const data = await file.toBuffer();
+
+    const mimeErr = await validateUpload(file.filename, data);
+    if (mimeErr) throw Errors.badRequest(mimeErr);
+
     const view = await svc.upload({
       requestId:   req.params.id,
       clientId:    req.user.clientId,

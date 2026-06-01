@@ -1,3 +1,11 @@
+/** Format a comment timestamp as "Aug 31, 2026 at 2:45 PM". */
+export function fmtCommentDate(iso: string | Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  }).format(new Date(iso));
+}
+
 /** Format an ISO date string as a relative human-readable label. */
 export function fmtDate(iso: string | Date | null | undefined): string {
   if (!iso) return '';

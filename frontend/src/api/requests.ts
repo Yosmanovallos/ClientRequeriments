@@ -32,12 +32,13 @@ export interface RequestDetail extends RequestSummary {
 }
 
 export interface Comment {
-  id:        string;
-  requestId: string;
-  body:      string;
-  author:    string | null;
-  source:    string;
-  createdAt: string;
+  id:           string;
+  requestId:    string;
+  body:         string;         // sanitized HTML; legacy plain-text bodies start without '<'
+  author:       string | null;
+  authorUserId: string | null;
+  source:       string;
+  createdAt:    string;
 }
 
 export interface CreateRequestBody {

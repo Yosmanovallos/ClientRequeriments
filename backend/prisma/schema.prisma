@@ -53,6 +53,7 @@ model PortalUser {
   client         Client               @relation(fields: [clientId], references: [id])
   memberships    ProjectMember[]
   orgMemberships OrganizationMember[]
+  comments       Comment[]
 
   @@index([clientId])
   @@map("portal_users")
@@ -189,15 +190,17 @@ model StatusHistory {
 }
 
 model Comment {
-  id         String   @id @default(uuid()) @db.Uuid
-  requestId  String   @map("request_id") @db.Uuid
-  body       String   @db.Text
-  author     String?  @db.VarChar(128)
-  visibility String   @default("public") @db.VarChar(16)
-  source     String   @default("PORTAL") @db.VarChar(16)
-  createdAt  DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  requestId    String   @map("request_id") @db.Uuid
+  body         String   @db.Text            // stores sanitized HTML (rich text)
+  author       String?  @db.VarChar(128)    // denormalized display name (kept for TICKET-sourced comments)
+  authorUserId String?  @map("author_user_id") @db.Uuid  // FK to portal_users (null for TICKET source)
+  visibility   String   @default("public") @db.VarChar(16)
+  source       String   @default("PORTAL") @db.VarChar(16)
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  request Request @relation(fields: [requestId], references: [id])
+  request    Request     @relation(fields: [requestId], references: [id])
+  authorUser PortalUser? @relation(fields: [authorUserId], references: [id])
 
   @@map("comments")
 }
@@ -206,6 +209,7 @@ model Attachment {
   id          String   @id @default(uuid()) @db.Uuid
   requestId   String   @map("request_id") @db.Uuid
   clientId    String   @map("client_id") @db.Uuid       // denormalised — fast tenant check w/o joining requests
+  commentId   String?  @map("comment_id") @db.Uuid      // optional — set when attachment is scoped to a comment
   fileName    String   @map("file_name") @db.VarChar(255)
   contentType String   @map("content_type") @db.VarChar(128)
   size        Int                                       // bytes
@@ -216,6 +220,7 @@ model Attachment {
   request Request @relation(fields: [requestId], references: [id])
 
   @@index([requestId])
+  @@index([commentId])
   @@map("attachments")
 }
 

@@ -13,8 +13,8 @@ export class InMemoryAttachmentsRepository implements IAttachmentsRepository {
   private readonly store = new Map<string, Attachment>();
 
   async add(att: Attachment): Promise<Attachment> {
-    this.store.set(att.id, att);
-    return att;
+    this.store.set(att.id, { ...att, commentId: att.commentId ?? null });
+    return this.store.get(att.id)!;
   }
 
   async findById(id: string, clientId: string): Promise<Attachment | null> {
@@ -41,7 +41,20 @@ export class PrismaAttachmentsRepository implements IAttachmentsRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async add(att: Attachment): Promise<Attachment> {
-    const row = await this.prisma.attachment.create({ data: att });
+    const row = await this.prisma.attachment.create({
+      data: {
+        id:          att.id,
+        requestId:   att.requestId,
+        clientId:    att.clientId,
+        commentId:   att.commentId ?? null,
+        fileName:    att.fileName,
+        contentType: att.contentType,
+        size:        att.size,
+        storageKey:  att.storageKey,
+        uploadedBy:  att.uploadedBy,
+        uploadedAt:  att.uploadedAt,
+      },
+    });
     return this.toDomain(row);
   }
 
@@ -64,11 +77,19 @@ export class PrismaAttachmentsRepository implements IAttachmentsRepository {
   }
 
   private toDomain = (r: {
-    id: string; requestId: string; clientId: string; fileName: string;
-    contentType: string; size: number; storageKey: string; uploadedBy: string; uploadedAt: Date;
+    id: string; requestId: string; clientId: string; commentId: string | null;
+    fileName: string; contentType: string; size: number; storageKey: string;
+    uploadedBy: string; uploadedAt: Date;
   }): Attachment => ({
-    id: r.id, requestId: r.requestId, clientId: r.clientId,
-    fileName: r.fileName, contentType: r.contentType, size: r.size,
-    storageKey: r.storageKey, uploadedBy: r.uploadedBy, uploadedAt: r.uploadedAt,
+    id:          r.id,
+    requestId:   r.requestId,
+    clientId:    r.clientId,
+    commentId:   r.commentId,
+    fileName:    r.fileName,
+    contentType: r.contentType,
+    size:        r.size,
+    storageKey:  r.storageKey,
+    uploadedBy:  r.uploadedBy,
+    uploadedAt:  r.uploadedAt,
   });
 }

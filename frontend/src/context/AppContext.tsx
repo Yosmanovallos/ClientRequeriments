@@ -28,7 +28,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authReady,       setAuthReady]       = useState(false);
   const [view,            setView]            = useState<View>(() => (localStorage.getItem('provana_view') as View) || 'portal');
   const [anim,            setAnim]            = useState('');
-  const [detailId,        setDetailId]        = useState<string | null>(null);
+  const [detailId,        setDetailId]        = useState<string | null>(() => localStorage.getItem('provana_detail_id'));
   const [activeProject,     setActiveProjectState]    = useState<ProjectSummary | null>(null);
   const [selectedTemplate,  setSelectedTemplate]       = useState<FormTemplate | null>(null);
 
@@ -71,7 +71,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const go = (next: View, params?: { id?: string }) => {
     setAnim('out');
     setTimeout(() => {
-      if (params?.id) setDetailId(params.id);
+      if (params?.id) {
+        setDetailId(params.id);
+        localStorage.setItem('provana_detail_id', params.id);
+      }
       setView(next);
       localStorage.setItem('provana_view', next);
       document.querySelector('.scroll')?.scrollTo(0, 0);
@@ -83,9 +86,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await auth.signOut();
     setUser(null);
     setActiveProject(null);
-    // Reset to portal so the router lands on ViewLogin (unauthenticated → login)
+    setDetailId(null);
     setView('portal');
     localStorage.setItem('provana_view', 'portal');
+    localStorage.removeItem('provana_detail_id');
   };
 
   return (

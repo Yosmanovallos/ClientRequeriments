@@ -172,7 +172,12 @@ async function main() {
       repo: requestsRepo, tickets: container.tickets, notifier: container.notifier, clock: container.clock,
     });
     const commentsSvc = new CommentsService({
-      comments: commentsRepo, requests: requestsRepo, tickets: container.tickets,
+      comments:  commentsRepo,
+      requests:  requestsRepo,
+      tickets:   container.tickets,
+      sanitizer: container.sanitizer,
+      storage:   container.storage,
+      notifier:  container.notifier,
     });
     const syncSvc = new SyncService({ requests: requestsSvc, comments: commentsSvc });
 

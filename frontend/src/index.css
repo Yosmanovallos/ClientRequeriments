@@ -389,6 +389,72 @@ button { font-family: inherit; cursor: pointer; }
 .comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .comment-date { font-size: 12px; color: var(--muted); margin-left: auto; }
 .comment-body { font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+.comment-body p { margin: 0 0 8px; }
+.comment-body p:last-child { margin-bottom: 0; }
+.comment-body ul, .comment-body ol { margin: 0 0 8px; padding-left: 22px; }
+.comment-body h1, .comment-body h2, .comment-body h3, .comment-body h4 { margin: 10px 0 6px; color: var(--ink); }
+.comment-body h1 { font-size: 18px; } .comment-body h2 { font-size: 16px; }
+.comment-body h3, .comment-body h4 { font-size: 14px; }
+.comment-body blockquote { border-left: 3px solid var(--line); margin: 8px 0; padding: 4px 12px; color: var(--muted); }
+.comment-body pre { background: #f4f5f7; border-radius: 4px; padding: 10px 14px; overflow-x: auto; font-size: 13px; }
+.comment-body code { background: #f4f5f7; border-radius: 3px; padding: 1px 5px; font-size: 13px; }
+.comment-body pre code { background: none; padding: 0; }
+.comment-body a { color: var(--purple); text-decoration: underline; }
+.comment-body img { max-width: 100%; border-radius: 4px; margin-top: 8px; display: block; cursor: zoom-in; }
+.comment-body table { border-collapse: collapse; width: 100%; margin-bottom: 8px; font-size: 13px; }
+.comment-body th, .comment-body td { border: 1px solid var(--line-2); padding: 6px 10px; text-align: left; }
+.comment-body th { background: #f4f5f7; font-weight: 600; }
+
+/* Rich-text editor (TipTap) */
+.editor-wrap { border: 1px solid var(--line-2); border-radius: 6px; background: #fff; overflow: hidden; }
+.editor-wrap:focus-within { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(74,46,128,.12); }
+.editor-toolbar {
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  padding: 6px 8px; border-bottom: 1px solid var(--line-2); background: #f9fafb;
+}
+.editor-tb-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 28px; padding: 0 5px;
+  border: none; background: transparent; border-radius: 4px;
+  font-size: 13px; font-family: inherit; color: var(--ink-2);
+  cursor: pointer; transition: background .12s;
+}
+.editor-tb-btn:hover { background: var(--hover); color: var(--ink); }
+.editor-tb-btn.is-active { background: #ede8f8; color: var(--purple); }
+.editor-tb-btn:disabled { opacity: .4; cursor: default; }
+.editor-tb-sep { width: 1px; height: 18px; background: var(--line-2); margin: 0 4px; flex-shrink: 0; }
+.editor-content { min-height: 100px; padding: 10px 14px; font-size: 14px; line-height: 1.55; color: var(--ink); outline: none; }
+.editor-content .ProseMirror { outline: none; }
+.editor-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left; color: var(--muted); pointer-events: none; height: 0;
+}
+.editor-content p { margin: 0 0 8px; }
+.editor-content p:last-child { margin-bottom: 0; }
+.editor-content ul, .editor-content ol { margin: 0 0 8px; padding-left: 22px; }
+.editor-content h1, .editor-content h2, .editor-content h3 { margin: 10px 0 6px; }
+.editor-content blockquote { border-left: 3px solid var(--line); margin: 8px 0; padding: 4px 12px; color: var(--muted); }
+.editor-content pre { background: #f4f5f7; border-radius: 4px; padding: 10px 14px; overflow-x: auto; font-size: 13px; }
+.editor-content code { background: #f4f5f7; border-radius: 3px; padding: 1px 5px; font-size: 13px; }
+.editor-content pre code { background: none; padding: 0; }
+.editor-content img { max-width: 100%; border-radius: 4px; margin-top: 8px; display: block; }
+.editor-content a { color: var(--purple); }
+
+/* Image lightbox */
+.lightbox-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.78);
+  display: flex; align-items: center; justify-content: center;
+  cursor: zoom-out;
+}
+.lightbox-inner { position: relative; max-width: 90vw; max-height: 90vh; }
+.lightbox-img { max-width: 90vw; max-height: 88vh; object-fit: contain; display: block; border-radius: 4px; }
+.lightbox-close {
+  position: absolute; top: -36px; right: -4px;
+  background: none; border: none; color: #fff; font-size: 22px;
+  cursor: pointer; line-height: 1; padding: 4px 8px; border-radius: 4px;
+}
+.lightbox-close:hover { background: rgba(255,255,255,.15); }
 
 /* Attachment list (detail) */
 .att-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }

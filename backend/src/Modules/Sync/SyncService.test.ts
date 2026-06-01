@@ -7,6 +7,8 @@ import { InMemoryCommentsRepository } from '../Comments/CommentsRepository.js';
 import type { ITicketSystem } from '../../Platform/Ports/ITicketSystem.js';
 import type { INotifier }     from '../../Platform/Ports/INotifier.js';
 import type { IClock }        from '../../Platform/Ports/IClock.js';
+import type { ISanitizer }    from '../../Platform/Ports/ISanitizer.js';
+import type { IFileStorage }  from '../../Platform/Ports/IFileStorage.js';
 import type { GitHubIssuesPayload, GitHubIssueCommentPayload } from './GitHubWebhookTypes.js';
 import type {
   AzureDevOpsWorkItemUpdatedPayload,
@@ -24,11 +26,17 @@ async function buildStackWithSeededRequest() {
     updateStatus: vi.fn(async () => undefined),
     addComment:   vi.fn(async () => undefined),
   };
-  const notifier: INotifier = { sendEmail: vi.fn(), sendChannelMessage: vi.fn() } as never;
-  const clock: IClock = { now: () => new Date('2026-05-29T12:00:00Z') };
+  const notifier: INotifier    = { sendEmail: vi.fn(), sendChannelMessage: vi.fn() } as never;
+  const clock: IClock          = { now: () => new Date('2026-05-29T12:00:00Z') };
+  const sanitizer: ISanitizer  = { sanitize: (html) => html };
+  const storage: IFileStorage  = {
+    upload:       vi.fn(async () => ({ key: 'k', url: 'http://local/k' })),
+    getSignedUrl: vi.fn(async (key: string) => `http://storage/${key}`),
+    delete:       vi.fn(async () => undefined),
+  };
 
   const reqSvc = new RequestsService({ repo, tickets, notifier, clock });
-  const cmtSvc = new CommentsService({ comments: cRepo, requests: repo, tickets });
+  const cmtSvc = new CommentsService({ comments: cRepo, requests: repo, tickets, sanitizer, storage, notifier });
   const sync   = new SyncService({ requests: reqSvc, comments: cmtSvc });
 
   // Create a request (issues an async ticket call we let resolve)

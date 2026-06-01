@@ -6,7 +6,7 @@ import { CommentsService }      from './CommentsService.js';
 import { z }                    from 'zod';
 
 const AddCommentSchema = z.object({
-  body: z.string().min(1).max(10_000),
+  body: z.string().min(1).max(100_000),
 });
 
 export function registerCommentsEndpoints(
@@ -16,9 +16,12 @@ export function registerCommentsEndpoints(
   requestsRepo: IRequestsRepository,
 ): void {
   const svc = new CommentsService({
-    comments: commentsRepo,
-    requests: requestsRepo,
-    tickets:  container.tickets,
+    comments:  commentsRepo,
+    requests:  requestsRepo,
+    tickets:   container.tickets,
+    sanitizer: container.sanitizer,
+    storage:   container.storage,
+    notifier:  container.notifier,
   });
 
   // GET /requests/:id/comments
@@ -34,10 +37,11 @@ export function registerCommentsEndpoints(
       return reply.status(400).send({ title: 'BAD_REQUEST', detail: parsed.error.message, status: 400 });
     }
     const comment = await svc.add({
-      requestId: req.params.id,
-      body:      parsed.data.body,
-      author:    req.user.displayName,
-      clientId:  req.user.clientId,
+      requestId:    req.params.id,
+      body:         parsed.data.body,
+      author:       req.user.displayName,
+      authorUserId: req.user.userId,
+      clientId:     req.user.clientId,
     });
     return reply.status(201).send(comment);
   });

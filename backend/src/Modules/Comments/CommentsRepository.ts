@@ -23,19 +23,20 @@ export class InMemoryCommentsRepository implements ICommentsRepository {
   }
 }
 
-// ── Prisma implementation (Phase 3) ─────────────────────────────────────────
+// ── Prisma implementation ─────────────────────────────────────────────────
 export class PrismaCommentsRepository implements ICommentsRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async add(c: Comment): Promise<Comment> {
     const row = await this.prisma.comment.create({
       data: {
-        id:         c.id,
-        requestId:  c.requestId,
-        body:       c.body,
-        author:     c.author,
-        visibility: c.visibility,
-        source:     c.source,
+        id:           c.id,
+        requestId:    c.requestId,
+        body:         c.body,
+        author:       c.author,
+        authorUserId: c.authorUserId,
+        visibility:   c.visibility,
+        source:       c.source,
       },
     });
     return this.toDomain(row);
@@ -51,14 +52,15 @@ export class PrismaCommentsRepository implements ICommentsRepository {
 
   private toDomain = (r: {
     id: string; requestId: string; body: string; author: string | null;
-    visibility: string; source: string; createdAt: Date;
+    authorUserId: string | null; visibility: string; source: string; createdAt: Date;
   }): Comment => ({
-    id:         r.id,
-    requestId:  r.requestId,
-    body:       r.body,
-    author:     r.author,
-    visibility: r.visibility as Comment['visibility'],
-    source:     r.source as Comment['source'],
-    createdAt:  r.createdAt,
+    id:           r.id,
+    requestId:    r.requestId,
+    body:         r.body,
+    author:       r.author,
+    authorUserId: r.authorUserId,
+    visibility:   r.visibility as Comment['visibility'],
+    source:       r.source as Comment['source'],
+    createdAt:    r.createdAt,
   });
 }

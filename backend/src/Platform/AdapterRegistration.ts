@@ -3,6 +3,7 @@ import type { IFileStorage }       from './Ports/IFileStorage';
 import type { ITicketSystem }      from './Ports/ITicketSystem';
 import type { INotifier }          from './Ports/INotifier';
 import type { IClock }             from './Ports/IClock';
+import type { ISanitizer }         from './Ports/ISanitizer';
 
 import { LocalIdentityProvider }    from './Adapters/Local/LocalIdentityProvider.js';
 import { LocalJwtIdentityProvider } from './Adapters/Local/LocalJwtIdentityProvider.js';
@@ -18,6 +19,7 @@ import { SmtpNotifier }             from './Adapters/Smtp/SmtpNotifier.js';
 import { SlackNotifier }            from './Adapters/Slack/SlackNotifier.js';
 import { TeamsNotifier }            from './Adapters/Teams/TeamsNotifier.js';
 import { CompositeNotifier }        from './Adapters/Composite/CompositeNotifier.js';
+import { SanitizeHtmlSanitizer }   from './Adapters/SanitizeHtml/SanitizeHtmlSanitizer.js';
 
 export interface Container {
   identity:    IIdentityProvider;
@@ -25,6 +27,7 @@ export interface Container {
   tickets:     ITicketSystem;
   notifier:    INotifier;
   clock:       IClock;
+  sanitizer:   ISanitizer;
   /** Set only when AUTH_PROVIDER=local-jwt — used by AuthEndpoints to sign tokens. */
   localJwt?:   LocalJwtIdentityProvider;
 }
@@ -44,6 +47,7 @@ export function buildContainer(env: NodeJS.ProcessEnv): Container {
     tickets:   buildTickets(env),
     notifier:  buildNotifier(env),
     clock:     new LocalClock(),
+    sanitizer: new SanitizeHtmlSanitizer(),
     localJwt:  identityResult.localJwt,
   };
 }

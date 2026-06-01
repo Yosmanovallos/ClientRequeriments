@@ -2,6 +2,7 @@ export interface Attachment {
   id:          string;
   requestId:   string;
   clientId:    string;
+  commentId:   string | null;   // set when the attachment is scoped to a comment (nullable)
   fileName:    string;
   contentType: string;
   size:        number;          // bytes
@@ -13,6 +14,7 @@ export interface Attachment {
 export interface UploadAttachmentCmd {
   requestId:   string;
   clientId:    string;
+  commentId?:  string | null;
   fileName:    string;
   contentType: string;
   data:        Buffer;

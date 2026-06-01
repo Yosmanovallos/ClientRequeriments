@@ -36,6 +36,7 @@ export class AttachmentsService {
       id,
       requestId:   cmd.requestId,
       clientId:    cmd.clientId,
+      commentId:   cmd.commentId ?? null,
       fileName:    cmd.fileName,
       contentType: cmd.contentType,
       size:        cmd.data.length,

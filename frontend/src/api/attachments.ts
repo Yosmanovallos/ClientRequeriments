@@ -12,6 +12,7 @@ function getToken(): string | null {
 export interface AttachmentView {
   id:          string;
   requestId:   string;
+  commentId:   string | null;
   fileName:    string;
   contentType: string;
   size:        number;
@@ -86,6 +87,18 @@ export const attachmentsApi = {
       }
     }
     return { succeeded, failed };
+  },
+
+  /**
+   * Upload a file from the CommentEditor inline attach button.
+   * Uses the request-scoped attachment endpoint; the storageKey is embedded
+   * in the comment body as an img src proxy URL: /api/comment-files/{storageKey}
+   */
+  async uploadForComment(
+    requestId: string,
+    file: File,
+  ): Promise<{ data: AttachmentView | null; error: { message: string } | null }> {
+    return attachmentsApi.upload(requestId, file);
   },
 
   /** Delete an attachment. */

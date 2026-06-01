@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { requestsApi, type RequestDetail, type Comment } from '../api/requests';
 import { attachmentsApi, type AttachmentView } from '../api/attachments';
 import { formTemplatesApi, type FormTemplate } from '../api/formTemplates';
-import { fmtDate, STATUS_COLORS } from '../lib/utils';
+import { fmtDate, fmtCommentDate, STATUS_COLORS } from '../lib/utils';
+import CommentEditor, { type CommentEditorHandle } from '../components/CommentEditor';
+import CommentBody from '../components/CommentBody';
 import TopNav from '../components/layout/TopNav';
 import PortalBanner from '../components/layout/PortalBanner';
 import FormCrumbs from '../components/layout/FormCrumbs';
@@ -22,9 +24,10 @@ export default function ViewRequestDetail({ requestId }: Props) {
   const [attachments, setAttachments] = useState<AttachmentView[]>([]);
   const [template,    setTemplate]    = useState<FormTemplate | null>(null);
   const [loading,     setLoading]     = useState(true);
-  const [comment,     setComment]     = useState('');
+  const [commentHtml, setCommentHtml] = useState('');
   const [sending,     setSending]     = useState(false);
   const [cmtError,    setCmtError]    = useState('');
+  const editorRef = useRef<CommentEditorHandle>(null);
 
   useEffect(() => {
     if (!requestId) { setLoading(false); return; }
@@ -50,14 +53,20 @@ export default function ViewRequestDetail({ requestId }: Props) {
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!comment.trim() || !req) return;
+    if (!req) return;
+    const isEmpty = editorRef.current?.isEmpty();
+    if (isEmpty) return;
     setSending(true); setCmtError('');
-    const { data, error } = await requestsApi.addComment(requestId, comment);
+    const { data, error } = await requestsApi.addComment(requestId, commentHtml);
     setSending(false);
     if (error) { setCmtError(error.message); return; }
     if (data) setComments(prev => [...prev, data as Comment]);
-    setComment('');
+    editorRef.current?.clearContent();
+    setCommentHtml('');
   };
+
+  // Request-level attachments (commentId = null) shown in the Attachments section
+  const requestAttachments = attachments.filter(a => !a.commentId);
 
   const color = STATUS_COLORS[req?.status ?? ''] ?? 'grey';
 
@@ -82,7 +91,6 @@ export default function ViewRequestDetail({ requestId }: Props) {
     </div>
   );
 
-  // Merge top-level fields (priority, dueDate) into the payload for unified display
   const displayData: Record<string, unknown> = {
     ...req.payloadData,
     priority: req.priority || undefined,
@@ -112,7 +120,7 @@ export default function ViewRequestDetail({ requestId }: Props) {
           </div>
         </div>
 
-        {/* ── Request Details (payload fields) ─────────────────────────── */}
+        {/* ── Request Details ───────────────────────────────────────────── */}
         {template && (
           <section className="detail-section">
             <h2 className="detail-section-title">Request Details</h2>
@@ -166,12 +174,14 @@ export default function ViewRequestDetail({ requestId }: Props) {
         {/* ── Attachments ───────────────────────────────────────────────── */}
         <section className="detail-section">
           <h2 className="detail-section-title">
-            Attachments {attachments.length > 0 && <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}>({attachments.length})</span>}
+            Attachments {requestAttachments.length > 0 && (
+              <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}>({requestAttachments.length})</span>
+            )}
           </h2>
-          {attachments.length === 0
+          {requestAttachments.length === 0
             ? <p style={{ color: 'var(--muted)', fontSize: 14 }}>No attachments.</p>
             : <ul className="att-list">
-                {attachments.map((a) => {
+                {requestAttachments.map((a) => {
                   const isImage = a.contentType.startsWith('image/');
                   return (
                     <li key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
@@ -204,16 +214,16 @@ export default function ViewRequestDetail({ requestId }: Props) {
           {comments.length === 0
             ? <p style={{ color: 'var(--muted)', fontSize: 14 }}>No comments yet.</p>
             : <div className="comment-list">
-                {comments.map((c, i) => (
-                  <div key={i} className="comment">
+                {comments.map((c) => (
+                  <div key={c.id} className="comment">
                     <div className="comment-header">
                       <strong>{c.author ?? 'Provana Team'}</strong>
                       {c.source === 'TICKET' && (
                         <span className="badge badge-blue" style={{ fontSize: 10 }}>BI Team</span>
                       )}
-                      <span className="comment-date">{fmtDate(c.createdAt)}</span>
+                      <span className="comment-date">{fmtCommentDate(c.createdAt)}</span>
                     </div>
-                    <div className="comment-body">{c.body}</div>
+                    <CommentBody body={c.body} />
                   </div>
                 ))}
               </div>
@@ -221,13 +231,19 @@ export default function ViewRequestDetail({ requestId }: Props) {
           <form onSubmit={handleComment} style={{ marginTop: 20 }}>
             <div className="field">
               <label className="field-label">Add a comment</label>
-              <textarea className="txt txt-area" value={comment}
-                onChange={e => setComment(e.target.value)}
-                placeholder="Write a comment…"
-                style={{ minHeight: 88 }} />
+              <CommentEditor
+                ref={editorRef}
+                requestId={requestId}
+                onChange={setCommentHtml}
+              />
             </div>
             {cmtError && <div className="submit-error">{cmtError}</div>}
-            <button type="submit" className="btn-send" disabled={sending || !comment.trim()}>
+            <button
+              type="submit"
+              className="btn-send"
+              style={{ marginTop: 10 }}
+              disabled={sending || !commentHtml || editorRef.current?.isEmpty() !== false}
+            >
               {sending ? 'Sending…' : 'Send'}
             </button>
           </form>
