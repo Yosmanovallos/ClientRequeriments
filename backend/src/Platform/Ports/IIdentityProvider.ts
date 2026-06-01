@@ -11,6 +11,8 @@ export interface UserIdentity {
   role?:       string | null;
   /** Project IDs the user has access to. Enriched in middleware from ProjectMember rows. */
   projectIds?: string[];
+  /** Organization IDs the user belongs to. Enriched in middleware from OrganizationMember rows. */
+  organizationIds?: string[];
   /** Whether the user account is currently active. Enriched in middleware. */
   isActive?:   boolean;
 }

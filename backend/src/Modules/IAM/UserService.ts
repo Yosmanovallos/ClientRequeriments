@@ -94,7 +94,8 @@ export class UserService {
     await this.setRole({ userId: input.userId, role: input.cmd.role, assignerRole: input.assignerRole });
     await this.setProjectMemberships(input.userId, input.cmd.projectIds);
     const u = await this.getById(input.userId);
-    const projectIds = await this.deps.users.listProjectIdsForUser(input.userId);
-    return { ...u, projectIds };
+    const projectIds      = await this.deps.users.listProjectIdsForUser(input.userId);
+    const organizationIds = await this.deps.users.listOrgIdsForUser(input.userId);
+    return { ...u, projectIds, organizationIds };
   }
 }

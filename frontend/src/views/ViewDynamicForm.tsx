@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { requestsApi } from '../api/requests';
 import { attachmentsApi } from '../api/attachments';
+import { orgsApi, type Organization } from '../api/admin';
 import type { FormTemplate } from '../api/formTemplates';
 import DynamicField from '../components/DynamicField';
 import TopNav from '../components/layout/TopNav';
@@ -23,6 +24,20 @@ export default function ViewDynamicForm({ template }: Props) {
 
   const [submitting,   setSubmitting]   = useState(false);
   const [submitMsg,    setSubmitMsg]    = useState('');
+
+  // Organization picker
+  const [orgs,           setOrgs]           = useState<Organization[]>([]);
+  const [organizationId, setOrganizationId] = useState<string>('');
+
+  useEffect(() => {
+    if (!activeProject) return;
+    orgsApi.list(activeProject.id).then(({ data }) => {
+      const list = data?.data ?? [];
+      setOrgs(list);
+      // Auto-select if user only belongs to one org
+      if (list.length === 1) setOrganizationId(list[0].id);
+    });
+  }, [activeProject?.id]);
 
   const fields = [...template.fieldSchema].sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -80,9 +95,10 @@ export default function ViewDynamicForm({ template }: Props) {
       requestType,
       title,
       priority,
-      dueDate:   dueDate || null,
-      projectId: activeProject.id,
-      payload:   { ...payloadValues, templateId: template.id },
+      dueDate:        dueDate || null,
+      projectId:      activeProject.id,
+      organizationId: organizationId || null,
+      payload:        { ...payloadValues, templateId: template.id },
     });
 
     if (error) {
@@ -163,6 +179,25 @@ export default function ViewDynamicForm({ template }: Props) {
               </svg>
             </span>
           </div>
+        </div>
+
+        {/* Organization picker — visible to all roles; CLIENT sees only their own orgs */}
+        <div className="field">
+          <label className="field-label">Share with organization</label>
+          <select
+            className="txt"
+            value={organizationId}
+            onChange={e => setOrganizationId(e.target.value)}
+            style={{ height: 42 }}
+          >
+            <option value="">— visible only to me —</option>
+            {orgs.map(o => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+          <span className="field-sub">
+            Members of the selected organization will also be able to see this request.
+          </span>
         </div>
 
         <form className="reqform" onSubmit={handleSubmit}>

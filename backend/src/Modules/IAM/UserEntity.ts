@@ -23,7 +23,8 @@ export interface CreatePortalUserCmd {
   displayName: string;
 }
 
-/** Returned by `/users/me` and the auth middleware enrichment — includes project IDs. */
+/** Returned by `/users/me` and the auth middleware enrichment — includes project and org IDs. */
 export interface PortalUserWithProjects extends PortalUser {
-  projectIds: string[];
+  projectIds:      string[];
+  organizationIds: string[];
 }

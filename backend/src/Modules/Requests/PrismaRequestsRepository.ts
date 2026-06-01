@@ -27,6 +27,7 @@ export class PrismaRequestsRepository implements IRequestsRepository {
           id:             cmd.id,
           clientId:       cmd.clientId,
           projectId:      cmd.projectId,
+          organizationId: cmd.organizationId,
           reference:      cmd.reference,
           requestType:    cmd.requestType,
           title:          cmd.title,
@@ -68,16 +69,33 @@ export class PrismaRequestsRepository implements IRequestsRepository {
   }
 
   async list(clientId: string, filters?: ListRequestsFilters): Promise<Request[]> {
+    // Build the project scope clause
+    const projectClause = filters?.projectId
+      ? { projectId: filters.projectId }
+      : filters?.projectIds
+        ? { projectId: { in: filters.projectIds } }
+        : {};
+
+    // Build the org-based visibility clause.
+    // When organizationIds is set, combine createdBy (own requests) OR organizationId IN orgs.
+    let visibilityClause: object = {};
+    if (filters?.organizationIds !== undefined) {
+      const orClauses: object[] = [];
+      if (filters.createdBy) orClauses.push({ createdBy: filters.createdBy });
+      if (filters.organizationIds.length > 0) {
+        orClauses.push({ organizationId: { in: filters.organizationIds } });
+      }
+      if (orClauses.length > 0) visibilityClause = { OR: orClauses };
+    } else if (filters?.createdBy) {
+      visibilityClause = { createdBy: filters.createdBy };
+    }
+
     const rows = await this.prisma.request.findMany({
       where: {
         clientId,
-        ...(filters?.status    ? { status:    filters.status }           : {}),
-        ...(filters?.createdBy ? { createdBy: filters.createdBy }        : {}),
-        ...(filters?.projectId
-          ? { projectId: filters.projectId }
-          : filters?.projectIds
-            ? { projectId: { in: filters.projectIds } }
-            : {}),
+        ...(filters?.status ? { status: filters.status } : {}),
+        ...projectClause,
+        ...visibilityClause,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -135,14 +153,17 @@ export class PrismaRequestsRepository implements IRequestsRepository {
   // ── private ─────────────────────────────────────────────────────────────
 
   private toDomain = (r: {
-    id: string; clientId: string; projectId: string | null; reference: string; requestType: string; title: string;
+    id: string; clientId: string; projectId: string | null; organizationId?: string | null;
+    reference: string; requestType: string; title: string;
     status: string; priority: string; dueDate: Date | null; payload: string;
-    idempotencyKey: string | null; createdBy: string | null; adoWorkItemId: string | null; adoWorkItemUrl: string | null;
+    idempotencyKey: string | null; createdBy: string | null;
+    adoWorkItemId: string | null; adoWorkItemUrl: string | null;
     createdAt: Date; updatedAt: Date;
   }): Request => ({
     id:             r.id,
     clientId:       r.clientId,
     projectId:      r.projectId,
+    organizationId: r.organizationId ?? null,
     reference:      r.reference,
     requestType:    r.requestType as RequestType,
     title:          r.title,

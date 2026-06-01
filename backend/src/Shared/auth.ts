@@ -57,9 +57,10 @@ export function authMiddleware(identity: IIdentityProvider, userRepo?: IUserRepo
         if (!portalUser.isActive) throw Errors.forbidden('Account is deactivated');
         req.user = {
           ...base,
-          role:       portalUser.role,
-          projectIds: portalUser.projectIds,
-          isActive:   portalUser.isActive,
+          role:            portalUser.role,
+          projectIds:      portalUser.projectIds,
+          organizationIds: portalUser.organizationIds,
+          isActive:        portalUser.isActive,
         };
         return;
       }

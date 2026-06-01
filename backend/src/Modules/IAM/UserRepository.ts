@@ -16,17 +16,26 @@ export interface IUserRepository {
   /** Replace the user's project memberships atomically. */
   setProjectMemberships(userId: string, projectIds: string[]): Promise<void>;
   listProjectIdsForUser(userId: string): Promise<string[]>;
+  /** Keep user's org membership cache in sync (InMemory only; no-op in Prisma). */
+  addOrgMembership(userId: string, orgId: string): Promise<void>;
+  removeOrgMembership(userId: string, orgId: string): Promise<void>;
+  listOrgIdsForUser(userId: string): Promise<string[]>;
 }
 
 // ── InMemory implementation (no DB needed) ──────────────────────────────────
 export class InMemoryUserRepository implements IUserRepository {
-  private readonly users = new Map<string, PortalUser>();
-  private readonly memberships = new Map<string, Set<string>>(); // userId → Set<projectId>
+  private readonly users          = new Map<string, PortalUser>();
+  private readonly memberships    = new Map<string, Set<string>>(); // userId → Set<projectId>
+  private readonly orgMemberships = new Map<string, Set<string>>(); // userId → Set<orgId>
 
   async findByAuthUserId(authUserId: string): Promise<PortalUserWithProjects | null> {
     for (const u of this.users.values()) {
       if (u.authUserId === authUserId) {
-        return { ...u, projectIds: [...(this.memberships.get(u.id) ?? [])] };
+        return {
+          ...u,
+          projectIds:      [...(this.memberships.get(u.id) ?? [])],
+          organizationIds: [...(this.orgMemberships.get(u.id) ?? [])],
+        };
       }
     }
     return null;
@@ -40,14 +49,22 @@ export class InMemoryUserRepository implements IUserRepository {
     return [...this.users.values()]
       .filter(u => u.role === null && (!clientId || u.clientId === clientId))
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-      .map(u => ({ ...u, projectIds: [...(this.memberships.get(u.id) ?? [])] }));
+      .map(u => ({
+        ...u,
+        projectIds:      [...(this.memberships.get(u.id) ?? [])],
+        organizationIds: [...(this.orgMemberships.get(u.id) ?? [])],
+      }));
   }
 
   async listAll(clientId?: string): Promise<PortalUserWithProjects[]> {
     return [...this.users.values()]
       .filter(u => !clientId || u.clientId === clientId)
       .sort((a, b) => a.email.localeCompare(b.email))
-      .map(u => ({ ...u, projectIds: [...(this.memberships.get(u.id) ?? [])] }));
+      .map(u => ({
+        ...u,
+        projectIds:      [...(this.memberships.get(u.id) ?? [])],
+        organizationIds: [...(this.orgMemberships.get(u.id) ?? [])],
+      }));
   }
 
   async create(cmd: CreatePortalUserCmd): Promise<PortalUser> {
@@ -84,6 +101,20 @@ export class InMemoryUserRepository implements IUserRepository {
   async listProjectIdsForUser(userId: string): Promise<string[]> {
     return [...(this.memberships.get(userId) ?? [])];
   }
+
+  async addOrgMembership(userId: string, orgId: string): Promise<void> {
+    const set = this.orgMemberships.get(userId) ?? new Set<string>();
+    set.add(orgId);
+    this.orgMemberships.set(userId, set);
+  }
+
+  async removeOrgMembership(userId: string, orgId: string): Promise<void> {
+    this.orgMemberships.get(userId)?.delete(orgId);
+  }
+
+  async listOrgIdsForUser(userId: string): Promise<string[]> {
+    return [...(this.orgMemberships.get(userId) ?? [])];
+  }
 }
 
 // ── Prisma implementation ───────────────────────────────────────────────────
@@ -93,12 +124,16 @@ export class PrismaUserRepository implements IUserRepository {
   async findByAuthUserId(authUserId: string): Promise<PortalUserWithProjects | null> {
     const row = await this.prisma.portalUser.findUnique({
       where:   { authUserId },
-      include: { memberships: { select: { projectId: true } } },
+      include: {
+        memberships:    { select: { projectId: true } },
+        orgMemberships: { select: { organizationId: true } },
+      },
     });
     if (!row) return null;
     return {
       ...this.toDomain(row),
-      projectIds: row.memberships.map(m => m.projectId),
+      projectIds:      row.memberships.map(m => m.projectId),
+      organizationIds: row.orgMemberships.map(m => m.organizationId),
     };
   }
 
@@ -111,18 +146,32 @@ export class PrismaUserRepository implements IUserRepository {
     const rows = await this.prisma.portalUser.findMany({
       where:   { role: null, ...(clientId ? { clientId } : {}) },
       orderBy: { createdAt: 'asc' },
-      include: { memberships: { select: { projectId: true } } },
+      include: {
+        memberships:    { select: { projectId: true } },
+        orgMemberships: { select: { organizationId: true } },
+      },
     });
-    return rows.map(r => ({ ...this.toDomain(r), projectIds: r.memberships.map(m => m.projectId) }));
+    return rows.map(r => ({
+      ...this.toDomain(r),
+      projectIds:      r.memberships.map(m => m.projectId),
+      organizationIds: r.orgMemberships.map(m => m.organizationId),
+    }));
   }
 
   async listAll(clientId?: string): Promise<PortalUserWithProjects[]> {
     const rows = await this.prisma.portalUser.findMany({
       where:   clientId ? { clientId } : undefined,
       orderBy: { email: 'asc' },
-      include: { memberships: { select: { projectId: true } } },
+      include: {
+        memberships:    { select: { projectId: true } },
+        orgMemberships: { select: { organizationId: true } },
+      },
     });
-    return rows.map(r => ({ ...this.toDomain(r), projectIds: r.memberships.map(m => m.projectId) }));
+    return rows.map(r => ({
+      ...this.toDomain(r),
+      projectIds:      r.memberships.map(m => m.projectId),
+      organizationIds: r.orgMemberships.map(m => m.organizationId),
+    }));
   }
 
   async create(cmd: CreatePortalUserCmd): Promise<PortalUser> {
@@ -162,6 +211,20 @@ export class PrismaUserRepository implements IUserRepository {
       where: { userId }, select: { projectId: true },
     });
     return rows.map(r => r.projectId);
+  }
+
+  /** No-op in Prisma — org memberships are written by OrganizationRepository and read via JOIN. */
+  async addOrgMembership(_userId: string, _orgId: string): Promise<void> {}
+
+  /** No-op in Prisma — deletion is handled by OrganizationRepository or FK cascade. */
+  async removeOrgMembership(_userId: string, _orgId: string): Promise<void> {}
+
+  async listOrgIdsForUser(userId: string): Promise<string[]> {
+    const rows = await this.prisma.organizationMember.findMany({
+      where:  { userId },
+      select: { organizationId: true },
+    });
+    return rows.map(r => r.organizationId);
   }
 
   private toDomain = (r: {

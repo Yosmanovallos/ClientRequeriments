@@ -15,6 +15,7 @@ export interface Request {
   id:              string;
   clientId:        string;
   projectId:       string | null;    // project this request belongs to
+  organizationId:  string | null;    // optional org scope for ticket visibility
   reference:       string;           // e.g. CBLPBR-629
   requestType:     RequestType;
   title:           string;
@@ -43,6 +44,7 @@ export interface StatusHistoryEntry {
 export interface CreateRequestCmd {
   clientId:       string;
   projectId:      string | null;
+  organizationId: string | null;
   requestType:    RequestType;
   title:          string;
   priority:       string;

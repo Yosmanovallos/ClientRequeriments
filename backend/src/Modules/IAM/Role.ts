@@ -81,6 +81,16 @@ export const PERMISSIONS = {
   'requests.update_status':      'AGENT',            // + project access check
   'requests.list':               'CLIENT',           // server filters by what they can see
 
+  // Organizations (sub-entities of projects for ticket visibility scoping)
+  'organizations.create':        'ADMIN',
+  'organizations.update':        'ADMIN',
+  'organizations.delete':        'SUPER_ADMIN',
+  'organizations.read':          'CLIENT',
+  'organizations.list':          'CLIENT',
+  'organizations.members.list':  'CLIENT',
+  'organizations.members.add':   'ADMIN',
+  'organizations.members.remove': 'ADMIN',
+
   // Attachments / Comments
   'attachments.upload':          'CLIENT',           // + ownership / project access
   'attachments.download':        'CLIENT',

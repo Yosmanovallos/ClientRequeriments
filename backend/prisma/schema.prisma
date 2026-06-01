@@ -24,6 +24,7 @@ model Client {
   projects      Project[]
   users         PortalUser[]
   formTemplates FormTemplate[]
+  organizations Organization[]
 
   @@map("clients")
 }
@@ -49,8 +50,9 @@ model PortalUser {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt        @map("updated_at")
 
-  client      Client          @relation(fields: [clientId], references: [id])
-  memberships ProjectMember[]
+  client         Client               @relation(fields: [clientId], references: [id])
+  memberships    ProjectMember[]
+  orgMemberships OrganizationMember[]
 
   @@index([clientId])
   @@map("portal_users")
@@ -69,10 +71,11 @@ model Project {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt        @map("updated_at")
 
-  client      Client              @relation(fields: [clientId], references: [id])
-  members     ProjectMember[]
-  requests    Request[]
-  formConfigs ProjectFormConfig[]
+  client        Client              @relation(fields: [clientId], references: [id])
+  members       ProjectMember[]
+  requests      Request[]
+  formConfigs   ProjectFormConfig[]
+  organizations Organization[]
 
   @@unique([clientId, slug])
   @@index([clientId])
@@ -141,6 +144,7 @@ model Request {
   id             String    @id @default(uuid()) @db.Uuid
   clientId       String    @map("client_id") @db.Uuid
   projectId      String?   @map("project_id") @db.Uuid           // nullable for backward-compat with pre-migration data
+  organizationId String?   @map("organization_id") @db.Uuid      // optional org scoping for ticket visibility
   templateId     String?   @map("template_id") @db.Uuid          // which FormTemplate produced this request (null for legacy)
   reference      String    @unique @db.VarChar(20)
   requestType    String    @map("request_type") @db.VarChar(64)
@@ -156,15 +160,17 @@ model Request {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  client      Client          @relation(fields: [clientId], references: [id])
-  project     Project?        @relation(fields: [projectId], references: [id])
-  template    FormTemplate?   @relation(fields: [templateId], references: [id])
-  history     StatusHistory[]
-  comments    Comment[]
-  outbox      OutboxEvent[]
-  attachments Attachment[]
+  client       Client          @relation(fields: [clientId], references: [id])
+  project      Project?        @relation(fields: [projectId], references: [id])
+  organization Organization?   @relation(fields: [organizationId], references: [id])
+  template     FormTemplate?   @relation(fields: [templateId], references: [id])
+  history      StatusHistory[]
+  comments     Comment[]
+  outbox       OutboxEvent[]
+  attachments  Attachment[]
 
   @@index([projectId])
+  @@index([organizationId])
   @@map("requests")
 }
 
@@ -234,4 +240,42 @@ model ClientRefCounter {
   client Client @relation(fields: [clientId], references: [id])
 
   @@map("client_ref_counters")
+}
+
+// Organization — a sub-entity of a Project used to scope ticket visibility.
+// Clients submit requests on behalf of their organization; AGENT/CLIENT users can
+// only see requests that belong to their organization(s) or that they submitted.
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  clientId    String   @map("client_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  name        String   @db.VarChar(128)
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  client   Client               @relation(fields: [clientId],  references: [id])
+  project  Project              @relation(fields: [projectId], references: [id])
+  members  OrganizationMember[]
+  requests Request[]
+
+  @@unique([projectId, name])
+  @@index([clientId])
+  @@map("organizations")
+}
+
+// Organization membership — grants a portal user access to requests scoped to this org.
+model OrganizationMember {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id")         @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         PortalUser   @relation(fields: [userId],         references: [id])
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
 }

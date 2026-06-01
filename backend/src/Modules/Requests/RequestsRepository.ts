@@ -1,10 +1,13 @@
 import type { Request, CreateRequestCmd, StatusHistoryEntry } from './Request';
 
 export interface ListRequestsFilters {
-  status?:     string;
-  projectId?:  string;       // filter by a specific project
-  projectIds?: string[];     // filter by ANY of these (used when no project is selected)
-  createdBy?:  string;       // restrict to requests submitted by this email (CLIENT scope)
+  status?:         string;
+  projectId?:      string;       // filter by a specific project
+  projectIds?:     string[];     // filter by ANY of these (used when no project is selected)
+  createdBy?:      string;       // restrict to requests submitted by this email
+  /** When both createdBy and organizationIds are set, the filter is an OR:
+   *  show requests created by the user OR belonging to one of these orgs. */
+  organizationIds?: string[];    // org-based visibility (combined with createdBy as OR)
 }
 
 export interface IRequestsRepository {
@@ -35,6 +38,7 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
       id:             cmd.id,
       clientId:       cmd.clientId,
       projectId:      cmd.projectId,
+      organizationId: cmd.organizationId,
       reference:      cmd.reference,
       requestType:    cmd.requestType,
       title:          cmd.title,
@@ -76,10 +80,20 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
   async list(clientId: string, filters?: ListRequestsFilters): Promise<Request[]> {
     return [...this.requests.values()]
       .filter(r => r.clientId === clientId)
-      .filter(r => !filters?.status     || r.status    === filters.status)
-      .filter(r => !filters?.projectId  || r.projectId === filters.projectId)
+      .filter(r => !filters?.status    || r.status    === filters.status)
+      .filter(r => !filters?.projectId || r.projectId === filters.projectId)
       .filter(r => !filters?.projectIds || filters.projectIds.length === 0 || filters.projectIds.includes(r.projectId ?? ''))
-      .filter(r => !filters?.createdBy  || r.createdBy === filters.createdBy)
+      .filter(r => {
+        // Org-based visibility: when organizationIds is set, apply an OR condition.
+        // byCreator is only true when createdBy is set AND matches (not a fallback to true).
+        if (filters?.organizationIds !== undefined) {
+          const byCreator = !!filters.createdBy && r.createdBy === filters.createdBy;
+          const byOrg     = r.organizationId != null && filters.organizationIds.includes(r.organizationId);
+          return byCreator || byOrg;
+        }
+        // Simple createdBy filter (no org context)
+        return !filters?.createdBy || r.createdBy === filters.createdBy;
+      })
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 

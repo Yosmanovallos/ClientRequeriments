@@ -27,12 +27,15 @@ import { registerUserEndpoints } from './Modules/IAM/UserEndpoints.js';
 import { InMemoryFormTemplateRepository, PrismaFormTemplateRepository } from './Modules/FormTemplates/FormTemplateRepository.js';
 import { registerFormTemplateEndpoints } from './Modules/FormTemplates/FormTemplateEndpoints.js';
 import { seedStandardTemplates } from './Modules/FormTemplates/standardTemplates.js';
-import type { IRequestsRepository }   from './Modules/Requests/RequestsRepository.js';
-import type { ICommentsRepository }   from './Modules/Comments/CommentsRepository.js';
-import type { IAttachmentsRepository } from './Modules/Attachments/AttachmentsRepository.js';
-import type { IUserRepository }        from './Modules/IAM/UserRepository.js';
-import type { IProjectRepository }     from './Modules/IAM/ProjectRepository.js';
+import { InMemoryOrganizationRepository, PrismaOrganizationRepository } from './Modules/Organizations/OrganizationRepository.js';
+import { registerOrganizationEndpoints } from './Modules/Organizations/OrganizationEndpoints.js';
+import type { IRequestsRepository }     from './Modules/Requests/RequestsRepository.js';
+import type { ICommentsRepository }     from './Modules/Comments/CommentsRepository.js';
+import type { IAttachmentsRepository }  from './Modules/Attachments/AttachmentsRepository.js';
+import type { IUserRepository }         from './Modules/IAM/UserRepository.js';
+import type { IProjectRepository }      from './Modules/IAM/ProjectRepository.js';
 import type { IFormTemplateRepository } from './Modules/FormTemplates/FormTemplateRepository.js';
+import type { IOrganizationRepository } from './Modules/Organizations/OrganizationRepository.js';
 
 async function main() {
   const app = Fastify({ logger: loggerOptions() as any });
@@ -56,6 +59,7 @@ async function main() {
   let userRepo:        IUserRepository;
   let projectRepo:     IProjectRepository;
   let templateRepo:    IFormTemplateRepository;
+  let orgRepo:         IOrganizationRepository;
   if (isDbConfigured()) {
     const prisma     = getPrismaClient();
     requestsRepo     = new PrismaRequestsRepository(prisma);
@@ -64,6 +68,7 @@ async function main() {
     userRepo         = new PrismaUserRepository(prisma);
     projectRepo      = new PrismaProjectRepository(prisma);
     templateRepo     = new PrismaFormTemplateRepository(prisma);
+    orgRepo          = new PrismaOrganizationRepository(prisma);
     app.log.info('Using Prisma repositories (DATABASE_URL set)');
   } else {
     requestsRepo     = new InMemoryRequestsRepository();
@@ -72,6 +77,7 @@ async function main() {
     userRepo         = new InMemoryUserRepository();
     projectRepo      = new InMemoryProjectRepository();
     templateRepo     = new InMemoryFormTemplateRepository();
+    orgRepo          = new InMemoryOrganizationRepository();
     app.log.warn('Using InMemory repositories (DATABASE_URL not set — data will be lost on restart)');
   }
 
@@ -132,12 +138,13 @@ async function main() {
   }));
 
   // Module routes
-  registerRequestsEndpoints(app, container, requestsRepo);
+  registerRequestsEndpoints(app, container, requestsRepo, orgRepo);
   registerCommentsEndpoints(app, container, commentsRepo, requestsRepo);
   registerAttachmentsEndpoints(app, container, attachmentsRepo, requestsRepo);
   registerProjectEndpoints(app, projectRepo);
   registerUserEndpoints(app, userRepo, projectRepo);
   registerFormTemplateEndpoints(app, templateRepo, projectRepo);
+  registerOrganizationEndpoints(app, orgRepo, userRepo, projectRepo);
 
   // Local JWT auth endpoints — only active when AUTH_PROVIDER=local-jwt
   if (container.localJwt && isDbConfigured()) {

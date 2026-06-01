@@ -3,21 +3,23 @@ import { useApp } from '../../context/AppContext';
 import TopNav from '../../components/layout/TopNav';
 import type { FormTemplate } from '../../api/formTemplates';
 
-export type CPSection = 'overview' | 'users' | 'projects' | 'forms' | 'form-builder' | 'project-members';
+export type CPSection = 'overview' | 'users' | 'projects' | 'forms' | 'form-builder' | 'project-members' | 'project-orgs';
 
 // Lazy-loaded at module level so React doesn't remount on every render
-const ViewCPOverview       = React.lazy(() => import('./ViewCPOverview'));
-const ViewCPUsers          = React.lazy(() => import('./ViewCPUsers'));
-const ViewCPProjects       = React.lazy(() => import('./ViewCPProjects'));
-const ViewCPProjectMembers = React.lazy(() => import('./ViewCPProjectMembers'));
-const ViewCPForms          = React.lazy(() => import('./ViewCPForms'));
-const ViewCPFormBuilder    = React.lazy(() => import('./ViewCPFormBuilder'));
+const ViewCPOverview        = React.lazy(() => import('./ViewCPOverview'));
+const ViewCPUsers           = React.lazy(() => import('./ViewCPUsers'));
+const ViewCPProjects        = React.lazy(() => import('./ViewCPProjects'));
+const ViewCPProjectMembers  = React.lazy(() => import('./ViewCPProjectMembers'));
+const ViewCPOrganizations   = React.lazy(() => import('./ViewCPOrganizations'));
+const ViewCPForms           = React.lazy(() => import('./ViewCPForms'));
+const ViewCPFormBuilder     = React.lazy(() => import('./ViewCPFormBuilder'));
 
 const SUPER_ADMIN_NAV: { id: CPSection; label: string }[] = [
-  { id: 'overview',  label: 'Overview' },
-  { id: 'users',     label: 'Users' },
-  { id: 'projects',  label: 'Projects' },
-  { id: 'forms',     label: 'Forms' },
+  { id: 'overview',      label: 'Overview' },
+  { id: 'users',         label: 'Users' },
+  { id: 'projects',      label: 'Projects' },
+  { id: 'project-orgs',  label: 'Organizations' },
+  { id: 'forms',         label: 'Forms' },
 ];
 
 const ADMIN_NAV: { id: CPSection; label: string }[] = [
@@ -43,6 +45,7 @@ export default function ViewControlPanel({ initialSection }: Props) {
 
   const handleNavigate = (s: CPSection, projectId?: string, editTemplate?: FormTemplate) => {
     if (projectId !== undefined) setSelectedProjectId(projectId);
+    else if (s === 'project-orgs') setSelectedProjectId(undefined);
     if (s !== 'form-builder') setBuilderTemplate(undefined);
     else if (editTemplate !== undefined) setBuilderTemplate(editTemplate);
     setSection(s);
@@ -85,6 +88,12 @@ export default function ViewControlPanel({ initialSection }: Props) {
               <ViewCPProjectMembers
                 projectId={selectedProjectId ?? ''}
                 onBack={() => handleNavigate('projects')}
+              />
+            )}
+            {section === 'project-orgs' && (
+              <ViewCPOrganizations
+                projectId={selectedProjectId}
+                onBack={selectedProjectId ? () => handleNavigate('projects') : undefined}
               />
             )}
             {section === 'forms' && (

@@ -1,20 +1,21 @@
 import { api } from './client';
 
 export interface RequestSummary {
-  id:          string;
-  reference:   string;
-  requestType: string;
-  title:       string;
-  status:      string;
-  priority:    string;
-  dueDate:     string | null;
-  projectId:   string | null;
-  createdBy:   string | null;
-  createdAt:   string;
-  updatedAt:   string;
+  id:             string;
+  reference:      string;
+  requestType:    string;
+  title:          string;
+  status:         string;
+  priority:       string;
+  dueDate:        string | null;
+  projectId:      string | null;
+  organizationId: string | null;
+  createdBy:      string | null;
+  createdAt:      string;
+  updatedAt:      string;
   adoWorkItemId:  string | null;
   adoWorkItemUrl: string | null;
-  payloadData: Record<string, unknown>;
+  payloadData:    Record<string, unknown>;
 }
 
 export interface StatusHistoryEntry {
@@ -40,13 +41,14 @@ export interface Comment {
 }
 
 export interface CreateRequestBody {
-  requestType:    string;
-  title:          string;
-  priority:       string;
-  dueDate?:       string | null;
-  payload:        Record<string, unknown>;
+  requestType:     string;
+  title:           string;
+  priority:        string;
+  dueDate?:        string | null;
+  payload:         Record<string, unknown>;
   idempotencyKey?: string | null;
-  projectId?:     string | null;
+  projectId?:      string | null;
+  organizationId?: string | null;
 }
 
 export const requestsApi = {

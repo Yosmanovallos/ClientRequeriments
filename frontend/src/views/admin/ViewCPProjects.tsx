@@ -260,6 +260,10 @@ export default function ViewCPProjects({ onNavigate }: Props) {
                     onClick={() => onNavigate('project-members', p.id)}>
                     Members
                   </button>
+                  <button className="topnav-action" style={{ fontSize: 12, padding: '4px 10px', marginRight: 6 }}
+                    onClick={() => onNavigate('project-orgs', p.id)}>
+                    Orgs
+                  </button>
                   <button className="topnav-action" style={{ fontSize: 12, padding: '4px 10px' }}
                     onClick={() => onNavigate('forms', p.id)}>
                     Forms

@@ -9,6 +9,7 @@ export const CreateRequestSchema = z.object({
   payload:        z.record(z.unknown()).default({}),
   idempotencyKey: z.string().max(64).nullable().optional(),
   projectId:      z.string().uuid().nullable().optional(),
+  organizationId: z.string().uuid().nullable().optional(),
 });
 
 export type CreateRequestInput = z.infer<typeof CreateRequestSchema>;

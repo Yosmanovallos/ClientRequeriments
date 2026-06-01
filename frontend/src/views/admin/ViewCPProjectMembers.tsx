@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { projectsApi, usersApi, type PortalUser } from '../../api/admin';
+import { projectsApi, usersApi, type ProjectMember, type PortalUser } from '../../api/admin';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function ViewCPProjectMembers({ projectId, onBack }: Props) {
-  const [members,     setMembers]     = useState<PortalUser[]>([]);
+  const [members,     setMembers]     = useState<ProjectMember[]>([]);
   const [allUsers,    setAllUsers]    = useState<PortalUser[]>([]);
   const [projectName, setProjectName] = useState('Project');
   const [loading,     setLoading]     = useState(true);
@@ -52,8 +52,9 @@ export default function ViewCPProjectMembers({ projectId, onBack }: Props) {
   if (loading) return <LoadingSpinner />;
   if (error)   return <p style={{ color: 'var(--ink-2)' }}>{error}</p>;
 
-  const memberIds   = new Set(members.map(m => m.id));
-  const nonMembers  = allUsers.filter(u => !memberIds.has(u.id) && u.role !== null);
+  const userMap    = Object.fromEntries(allUsers.map(u => [u.id, u]));
+  const memberUserIds = new Set(members.map(m => m.userId));
+  const nonMembers = allUsers.filter(u => !memberUserIds.has(u.id) && u.role !== null);
 
   return (
     <div>
@@ -98,24 +99,27 @@ export default function ViewCPProjectMembers({ projectId, onBack }: Props) {
                 </td>
               </tr>
             )}
-            {members.map(m => (
-              <tr key={m.id}>
-                <td>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{m.displayName ?? '—'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.email}</div>
-                </td>
-                <td>
-                  {m.role && <span className="badge badge-grey">{m.role.replace('_', ' ')}</span>}
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  <button className="topnav-action"
-                    style={{ fontSize: 12, padding: '4px 10px', color: '#a30000', borderColor: '#ffd9d9' }}
-                    onClick={() => handleRemove(m.id)}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {members.map(m => {
+              const u = userMap[m.userId];
+              return (
+                <tr key={m.id}>
+                  <td>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{u?.displayName ?? u?.email ?? '—'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{u?.email ?? m.userId}</div>
+                  </td>
+                  <td>
+                    {u?.role && <span className="badge badge-grey">{u.role.replace('_', ' ')}</span>}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="topnav-action"
+                      style={{ fontSize: 12, padding: '4px 10px', color: '#a30000', borderColor: '#ffd9d9' }}
+                      onClick={() => handleRemove(m.userId)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

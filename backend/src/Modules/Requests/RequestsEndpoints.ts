@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Container }       from '../../Platform/AdapterRegistration.js';
 import type { IRequestsRepository, ListRequestsFilters } from './RequestsRepository.js';
+import type { IOrganizationRepository } from '../Organizations/OrganizationRepository.js';
 import { RequestsService }      from './RequestsService.js';
 import { CreateRequestSchema, ListRequestsSchema } from './RequestsValidators.js';
 import { requirePermission, requireProjectAccess } from '../IAM/PermissionGuard.js';
@@ -12,8 +13,8 @@ import { Errors } from '../../Shared/errors.js';
  * Access rules enforced here (source of truth is Role.ts + PermissionGuard.ts):
  *   POST  /requests     — CLIENT and above; project access checked if projectId supplied
  *   GET   /requests     — CLIENT and above; results scoped by role:
- *                         CLIENT     → own requests in active project only (createdBy filter)
- *                         AGENT      → all requests in active project ONLY (strict: no cross-project)
+ *                         CLIENT     → own requests + requests in their orgs, within active projects
+ *                         AGENT      → all requests in active projects (no org restriction)
  *                         ADMIN      → all requests in their tenant (optionally filtered by project)
  *                         SUPER_ADMIN→ all requests (optionally filtered by project)
  *   GET   /requests/:id — CLIENT and above; AGENT/CLIENT validated against project membership
@@ -22,6 +23,7 @@ export function registerRequestsEndpoints(
   app: FastifyInstance,
   container: Container,
   repo: IRequestsRepository,
+  orgRepo?: IOrganizationRepository,
 ): void {
   const svc = new RequestsService({
     repo,
@@ -50,9 +52,20 @@ export function registerRequestsEndpoints(
       requireProjectAccess(req.user, input.projectId);
     }
 
+    // Validate org belongs to the correct project + client
+    if (input.organizationId && orgRepo) {
+      const org = await orgRepo.findById(input.organizationId);
+      if (!org) throw Errors.notFound(`Organization ${input.organizationId} not found`);
+      if (org.clientId !== req.user.clientId) throw Errors.forbidden('Organization does not belong to this client');
+      if (input.projectId && org.projectId !== input.projectId) {
+        throw Errors.badRequest('Organization does not belong to the selected project');
+      }
+    }
+
     const result = await svc.create({
       clientId:       req.user.clientId,
       projectId:      input.projectId ?? null,
+      organizationId: input.organizationId ?? null,
       requestType:    input.requestType,
       title:          input.title,
       priority:       input.priority,
@@ -88,24 +101,26 @@ export function registerRequestsEndpoints(
       }
 
     } else if (role === 'AGENT') {
-      // STRICT project scope — AGENT cannot see cross-project data under any circumstance
+      // STRICT project scope — AGENT cannot see cross-project data under any circumstance.
+      // No org filtering for agents — they see all requests in their projects.
       if (query.projectId) {
         requireProjectAccess(req.user, query.projectId);
         filters.projectId = query.projectId;
       } else {
-        // No active project selected: restrict to ALL their assigned projects
         filters.projectIds = req.user.projectIds ?? [];
       }
 
     } else {
-      // CLIENT — own requests only, within their assigned projects
+      // CLIENT — own requests + requests in their orgs, within their assigned projects
       if (query.projectId) {
         requireProjectAccess(req.user, query.projectId);
         filters.projectId = query.projectId;
       } else {
         filters.projectIds = req.user.projectIds ?? [];
       }
-      filters.createdBy = req.user.email;
+      // Org-based visibility: show own requests OR requests in their orgs
+      filters.createdBy      = req.user.email;
+      filters.organizationIds = req.user.organizationIds ?? [];
     }
 
     const rows = await svc.list(req.user.clientId, filters);
@@ -126,9 +141,11 @@ export function registerRequestsEndpoints(
       }
     }
 
-    // CLIENT: must be the original submitter and in the request's project
+    // CLIENT: must be the original submitter OR belong to the request's org
     if (req.user.role === 'CLIENT') {
-      if (detail.createdBy && detail.createdBy !== req.user.email) {
+      const isOwner = detail.createdBy && detail.createdBy === req.user.email;
+      const inOrg   = detail.organizationId && (req.user.organizationIds ?? []).includes(detail.organizationId);
+      if (!isOwner && !inOrg) {
         throw Errors.forbidden('No access to this request');
       }
       if (detail.projectId && !req.user.projectIds?.includes(detail.projectId)) {

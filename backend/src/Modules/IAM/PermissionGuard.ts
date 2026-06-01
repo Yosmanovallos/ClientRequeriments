@@ -15,10 +15,11 @@ import { Errors } from '../../Shared/errors.js';
 
 interface UserContext {
   // Accepts the wire type `string | null | undefined` (from UserIdentity); we narrow internally.
-  role?:       Role | string | null;
-  isActive?:   boolean;
-  projectIds?: string[];
-  clientId?:   string;
+  role?:            Role | string | null;
+  isActive?:        boolean;
+  projectIds?:      string[];
+  organizationIds?: string[];
+  clientId?:        string;
 }
 
 /** Narrow an unknown string to a known Role, returning null if unknown / pending. */
@@ -81,4 +82,37 @@ export function visibleProjectIds(user: UserContext, allProjectIds: string[]): s
   if (role === 'SUPER_ADMIN') return allProjectIds;
   if (role === 'ADMIN') return allProjectIds;        // same-client filter happens in repo query
   return allProjectIds.filter(id => user.projectIds?.includes(id));
+}
+
+/**
+ * Verify the user has access to a specific organization.
+ *   SuperAdmin: always passes.
+ *   Admin (same client): always passes.
+ *   Agent: must be a member of the org's project.
+ *   Client: must be an explicit org member.
+ */
+export function requireOrganizationAccess(
+  user: UserContext | null | undefined,
+  org: { id: string; clientId: string; projectId: string },
+): void {
+  if (!user) throw Errors.unauthorized('Not authenticated');
+  if (user.isActive === false) throw Errors.forbidden('Account is deactivated');
+  const role = narrowRole(user.role);
+  if (role == null) throw Errors.forbidden('PENDING_APPROVAL');
+
+  if (role === 'SUPER_ADMIN') return;
+
+  if (role === 'ADMIN') {
+    if (org.clientId === user.clientId) return;
+    throw Errors.forbidden('No access to this organization');
+  }
+
+  if (role === 'AGENT') {
+    if (user.projectIds?.includes(org.projectId)) return;
+    throw Errors.forbidden('No access to this organization');
+  }
+
+  // CLIENT: must be an explicit member
+  if (user.organizationIds?.includes(org.id)) return;
+  throw Errors.forbidden('No access to this organization');
 }

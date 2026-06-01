@@ -21,16 +21,19 @@ export interface ProjectSummary {
 }
 
 export interface UserSession {
-  userId:      string;
-  email:       string;
-  displayName: string;
-  accessToken: string;
-  role:        string | null;
-  projects:    ProjectSummary[];
+  userId:          string;
+  email:           string;
+  displayName:     string;
+  accessToken:     string;
+  role:            string | null;
+  projects:        ProjectSummary[];
   /** Explicit project membership IDs from ProjectMember rows.
    *  For AGENT/CLIENT this matches `projects`. For ADMIN it may be a subset
    *  of all tenant projects — used to scope the Forms configuration dropdown. */
-  projectIds:  string[];
+  projectIds:      string[];
+  /** Organization membership IDs from OrganizationMember rows.
+   *  Used for org-based ticket visibility filtering on the CLIENT role. */
+  organizationIds: string[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,13 +46,14 @@ if (IS_SUPABASE) {
   }).catch(() => { /* stay in demo mode */ });
 }
 
-/** Enriches a verified token with role + projects from the backend. */
+/** Enriches a verified token with role + projects + orgs from the backend. */
 async function fetchEnrichment(
   userId: string, email: string, displayName: string, accessToken: string,
 ): Promise<UserSession> {
-  const meRes = await api.get<{ role: string | null; projectIds?: string[] }>('/users/me');
-  const role       = meRes.data?.role ?? null;
-  const projectIds = meRes.data?.projectIds ?? [];
+  const meRes = await api.get<{ role: string | null; projectIds?: string[]; organizationIds?: string[] }>('/users/me');
+  const role            = meRes.data?.role ?? null;
+  const projectIds      = meRes.data?.projectIds ?? [];
+  const organizationIds = meRes.data?.organizationIds ?? [];
 
   let projects: ProjectSummary[] = [];
   if (role !== null) {
@@ -57,7 +61,7 @@ async function fetchEnrichment(
     projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug, iconUrl: p.iconUrl ?? null })) ?? [];
   }
 
-  return { userId, email, displayName, accessToken, role, projects, projectIds };
+  return { userId, email, displayName, accessToken, role, projects, projectIds, organizationIds };
 }
 
 export const auth = {
@@ -151,23 +155,25 @@ export const auth = {
     if (IS_LOCAL) {
       // Re-enrich from backend using the stored token (already set via setToken)
       try {
-        const meRes = await api.get<{ id: string; email: string; displayName: string; role: string | null; projectIds?: string[] }>('/users/me');
+        const meRes = await api.get<{ id: string; email: string; displayName: string; role: string | null; projectIds?: string[]; organizationIds?: string[] }>('/users/me');
         if (!meRes.data) return null;
-        const role       = meRes.data.role ?? null;
-        const projectIds = meRes.data.projectIds ?? [];
+        const role            = meRes.data.role ?? null;
+        const projectIds      = meRes.data.projectIds ?? [];
+        const organizationIds = meRes.data.organizationIds ?? [];
         let projects: ProjectSummary[] = [];
         if (role !== null) {
           const projRes = await api.get<{ data: Array<{ id: string; name: string; slug: string; iconUrl: string | null }> }>('/projects');
           projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug, iconUrl: p.iconUrl ?? null })) ?? [];
         }
         return {
-          userId:      meRes.data.id,
-          email:       meRes.data.email,
-          displayName: meRes.data.displayName,
-          accessToken: token,
+          userId:          meRes.data.id,
+          email:           meRes.data.email,
+          displayName:     meRes.data.displayName,
+          accessToken:     token,
           role,
           projects,
           projectIds,
+          organizationIds,
         };
       } catch {
         clearToken();
