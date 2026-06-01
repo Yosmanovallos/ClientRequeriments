@@ -36,9 +36,6 @@ export default function TopNav() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Primary actions — all roles can create requests */}
-      <button className="topnav-action" onClick={() => go('requests')}>+ Create Request</button>
-
       {/* CLIENT sees their own requests; AGENT/ADMIN see all project requests */}
       {isClient && (
         <button className="topnav-action" onClick={() => go('myrequests')}>My Requests</button>

@@ -12,6 +12,7 @@ import ViewProfile         from './views/ViewProfile';
 import ViewLogin           from './views/ViewLogin';
 import ViewRequestDetail   from './views/ViewRequestDetail';
 import ViewPendingApproval from './views/ViewPendingApproval';
+import ViewDeactivated     from './views/ViewDeactivated';
 import ViewProjectPicker   from './views/ViewProjectPicker';
 import ViewControlPanel    from './views/admin/ViewControlPanel';
 
@@ -23,6 +24,7 @@ function Router() {
   }
 
   if (!user) return <ViewLogin />;
+  if (!user.isActive) return <ViewDeactivated />;
   if (user.role === null) return <ViewPendingApproval />;
 
   // Project-scoped views that require an active project: fall back to portal so the user picks one

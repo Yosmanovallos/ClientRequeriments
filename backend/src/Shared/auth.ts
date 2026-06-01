@@ -36,6 +36,10 @@ export function authMiddleware(identity: IIdentityProvider, userRepo?: IUserRepo
       '/webhooks/github', '/webhooks/azuredevops',
     ]);
 
+  // Deactivated users may still call /users/me so the frontend can read isActive:false
+  // and show the "Account deactivated" screen instead of falling through to pending-approval.
+  const DEACTIVATION_EXEMPT = new Set(['/users/me']);
+
   return async function (req: FastifyRequest, _reply: FastifyReply): Promise<void> {
     if (PUBLIC_PATHS.has(req.url)) return;
 
@@ -54,7 +58,9 @@ export function authMiddleware(identity: IIdentityProvider, userRepo?: IUserRepo
     if (userRepo) {
       const portalUser = await userRepo.findByAuthUserId(base.userId);
       if (portalUser) {
-        if (!portalUser.isActive) throw Errors.forbidden('Account is deactivated');
+        if (!portalUser.isActive && !DEACTIVATION_EXEMPT.has(req.url)) {
+          throw Errors.forbidden('Account is deactivated');
+        }
         req.user = {
           ...base,
           role:            portalUser.role,

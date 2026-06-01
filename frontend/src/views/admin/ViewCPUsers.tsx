@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { usersApi, projectsApi, type PortalUser, type AdminProject } from '../../api/admin';
+import { useApp } from '../../context/AppContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 const ROLES = ['CLIENT', 'AGENT', 'ADMIN', 'SUPER_ADMIN'] as const;
@@ -11,17 +12,20 @@ function roleBadge(role: string): string {
 }
 
 interface SetupModalProps {
-  user:     PortalUser;
-  projects: AdminProject[];
-  onSave:   () => void;
-  onClose:  () => void;
+  user:          PortalUser;
+  projects:      AdminProject[];
+  isSuperAdmin:  boolean;
+  currentUserId: string;
+  onSave:        () => void;
+  onClose:       () => void;
 }
 
-function SetupModal({ user, projects, onSave, onClose }: SetupModalProps) {
-  const [role,    setRole]    = useState<string>(user.role ?? 'CLIENT');
-  const [selected, setSelected] = useState<Set<string>>(new Set(user.projectIds));
-  const [saving,  setSaving]  = useState(false);
-  const [error,   setError]   = useState('');
+function SetupModal({ user, projects, isSuperAdmin, currentUserId, onSave, onClose }: SetupModalProps) {
+  const [role,            setRole]            = useState<string>(user.role ?? 'CLIENT');
+  const [selected,        setSelected]        = useState<Set<string>>(new Set(user.projectIds));
+  const [saving,          setSaving]          = useState(false);
+  const [error,           setError]           = useState('');
+  const [confirmDeactive, setConfirmDeactive] = useState(false);
 
   const toggle = (id: string) =>
     setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -38,6 +42,18 @@ function SetupModal({ user, projects, onSave, onClose }: SetupModalProps) {
     onSave();
     onClose();
   };
+
+  const handleToggleActive = async () => {
+    setSaving(true);
+    setError('');
+    const res = await usersApi.setActive(user.id, !user.isActive);
+    setSaving(false);
+    if (res.error) { setError(res.error.message ?? 'Failed to update status'); return; }
+    onSave();
+    onClose();
+  };
+
+  const canDeactivate = isSuperAdmin && user.id !== currentUserId;
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -68,10 +84,46 @@ function SetupModal({ user, projects, onSave, onClose }: SetupModalProps) {
           </div>
         </div>
 
+        {canDeactivate && (
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            {!confirmDeactive ? (
+              <button
+                className="btn-cancel"
+                style={{ color: user.isActive ? 'var(--error, #d32f2f)' : 'var(--purple)', borderColor: user.isActive ? 'var(--error, #d32f2f)' : 'var(--purple)', width: '100%' }}
+                onClick={() => setConfirmDeactive(true)}
+                disabled={saving}
+              >
+                {user.isActive ? 'Deactivate account' : 'Reactivate account'}
+              </button>
+            ) : (
+              <div style={{ background: '#fff3f3', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 14px' }}>
+                <p style={{ fontSize: 13, color: 'var(--ink)', margin: '0 0 12px' }}>
+                  {user.isActive
+                    ? 'Deactivate this account? The user will be blocked from signing in.'
+                    : 'Reactivate this account? The user will be able to sign in again.'}
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn-cancel" style={{ flex: 1 }} onClick={() => setConfirmDeactive(false)} disabled={saving}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-send"
+                    style={{ flex: 1, background: user.isActive ? 'var(--error, #d32f2f)' : undefined }}
+                    onClick={handleToggleActive}
+                    disabled={saving}
+                  >
+                    {saving ? 'Saving…' : user.isActive ? 'Yes, deactivate' : 'Yes, reactivate'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="modal-actions">
           <button className="btn-cancel" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn-send" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Activate user'}
+            {saving ? 'Saving…' : user.role ? 'Save' : 'Activate user'}
           </button>
         </div>
       </div>
@@ -82,6 +134,9 @@ function SetupModal({ user, projects, onSave, onClose }: SetupModalProps) {
 type Filter = 'all' | 'pending' | 'active';
 
 export default function ViewCPUsers() {
+  const { user: currentUser } = useApp();
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+
   const [users,    setUsers]    = useState<PortalUser[]>([]);
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [loading,  setLoading]  = useState(true);
@@ -193,6 +248,8 @@ export default function ViewCPUsers() {
         <SetupModal
           user={modal}
           projects={projects}
+          isSuperAdmin={isSuperAdmin}
+          currentUserId={currentUser?.userId ?? ''}
           onSave={load}
           onClose={() => setModal(null)}
         />

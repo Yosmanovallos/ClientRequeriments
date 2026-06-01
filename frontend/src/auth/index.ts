@@ -26,6 +26,7 @@ export interface UserSession {
   displayName:     string;
   accessToken:     string;
   role:            string | null;
+  isActive:        boolean;
   projects:        ProjectSummary[];
   /** Explicit project membership IDs from ProjectMember rows.
    *  For AGENT/CLIENT this matches `projects`. For ADMIN it may be a subset
@@ -50,18 +51,19 @@ if (IS_SUPABASE) {
 async function fetchEnrichment(
   userId: string, email: string, displayName: string, accessToken: string,
 ): Promise<UserSession> {
-  const meRes = await api.get<{ role: string | null; projectIds?: string[]; organizationIds?: string[] }>('/users/me');
+  const meRes = await api.get<{ role: string | null; isActive?: boolean; projectIds?: string[]; organizationIds?: string[] }>('/users/me');
   const role            = meRes.data?.role ?? null;
+  const isActive        = meRes.data?.isActive ?? true;
   const projectIds      = meRes.data?.projectIds ?? [];
   const organizationIds = meRes.data?.organizationIds ?? [];
 
   let projects: ProjectSummary[] = [];
-  if (role !== null) {
+  if (role !== null && isActive) {
     const projRes = await api.get<{ data: Array<{ id: string; name: string; slug: string; iconUrl: string | null }> }>('/projects');
     projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug, iconUrl: p.iconUrl ?? null })) ?? [];
   }
 
-  return { userId, email, displayName, accessToken, role, projects, projectIds, organizationIds };
+  return { userId, email, displayName, accessToken, role, isActive, projects, projectIds, organizationIds };
 }
 
 export const auth = {
@@ -155,13 +157,14 @@ export const auth = {
     if (IS_LOCAL) {
       // Re-enrich from backend using the stored token (already set via setToken)
       try {
-        const meRes = await api.get<{ id: string; email: string; displayName: string; role: string | null; projectIds?: string[]; organizationIds?: string[] }>('/users/me');
+        const meRes = await api.get<{ id: string; email: string; displayName: string; role: string | null; isActive?: boolean; projectIds?: string[]; organizationIds?: string[] }>('/users/me');
         if (!meRes.data) return null;
         const role            = meRes.data.role ?? null;
+        const isActive        = meRes.data.isActive ?? true;
         const projectIds      = meRes.data.projectIds ?? [];
         const organizationIds = meRes.data.organizationIds ?? [];
         let projects: ProjectSummary[] = [];
-        if (role !== null) {
+        if (role !== null && isActive) {
           const projRes = await api.get<{ data: Array<{ id: string; name: string; slug: string; iconUrl: string | null }> }>('/projects');
           projects = projRes.data?.data.map(p => ({ id: p.id, name: p.name, slug: p.slug, iconUrl: p.iconUrl ?? null })) ?? [];
         }
@@ -171,6 +174,7 @@ export const auth = {
           displayName:     meRes.data.displayName,
           accessToken:     token,
           role,
+          isActive,
           projects,
           projectIds,
           organizationIds,

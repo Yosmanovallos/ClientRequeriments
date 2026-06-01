@@ -57,6 +57,8 @@ export const usersApi = {
     api.patch<void>(`/users/${id}/projects`, { projectIds }),
   setup:          (id: string, role: string | null, projectIds: string[]) =>
     api.patch<PortalUser>(`/users/${id}`, { role, projectIds }),
+  setActive:      (id: string, isActive: boolean) =>
+    api.patch<PortalUser>(`/users/${id}/active`, { isActive }),
 };
 
 export const projectsApi = {
