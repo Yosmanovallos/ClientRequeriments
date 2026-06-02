@@ -40,7 +40,7 @@ export function registerCommentsEndpoints(
       requestId:    req.params.id,
       body:         parsed.data.body,
       author:       req.user.displayName,
-      authorUserId: req.user.userId,
+      authorUserId: req.user.portalUserId ?? req.user.userId,
       clientId:     req.user.clientId,
     });
     return reply.status(201).send(comment);

@@ -9,8 +9,9 @@ export interface RequestSummary {
   priority:       string;
   dueDate:        string | null;
   projectId:      string | null;
-  organizationId: string | null;
-  createdBy:      string | null;
+  organizationId:   string | null;
+  organizationName: string | null;
+  createdBy:        string | null;
   createdAt:      string;
   updatedAt:      string;
   adoWorkItemId:  string | null;

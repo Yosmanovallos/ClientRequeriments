@@ -98,7 +98,8 @@ export class PrismaRequestsRepository implements IRequestsRepository {
         ...projectClause,
         ...visibilityClause,
       },
-      orderBy: { createdAt: 'desc' },
+      include:  { organization: { select: { name: true } } },
+      orderBy:  { createdAt: 'desc' },
     });
     return rows.map(this.toDomain);
   }
@@ -161,11 +162,13 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     idempotencyKey: string | null; createdBy: string | null;
     adoWorkItemId: string | null; adoWorkItemUrl: string | null;
     createdAt: Date; updatedAt: Date;
+    organization?: { name: string } | null;
   }): Request => ({
-    id:             r.id,
-    clientId:       r.clientId,
-    projectId:      r.projectId,
-    organizationId: r.organizationId ?? null,
+    id:               r.id,
+    clientId:         r.clientId,
+    projectId:        r.projectId,
+    organizationId:   r.organizationId ?? null,
+    organizationName: r.organization?.name ?? null,
     templateId:     r.templateId ?? null,
     reference:      r.reference,
     requestType:    r.requestType as RequestType,

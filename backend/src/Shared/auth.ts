@@ -63,6 +63,7 @@ export function authMiddleware(identity: IIdentityProvider, userRepo?: IUserRepo
         }
         req.user = {
           ...base,
+          portalUserId:    portalUser.id,
           role:            portalUser.role,
           projectIds:      portalUser.projectIds,
           organizationIds: portalUser.organizationIds,
@@ -80,9 +81,10 @@ export function authMiddleware(identity: IIdentityProvider, userRepo?: IUserRepo
       });
       req.user = {
         ...base,
-        role:       created.role,         // null → PENDING
-        projectIds: [],
-        isActive:   created.isActive,
+        portalUserId: created.id,
+        role:         created.role,   // null → PENDING
+        projectIds:   [],
+        isActive:     created.isActive,
       };
       return;
     }

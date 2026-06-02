@@ -423,8 +423,8 @@ button { font-family: inherit; cursor: pointer; }
 .editor-tb-btn.is-active { background: #ede8f8; color: var(--purple); }
 .editor-tb-btn:disabled { opacity: .4; cursor: default; }
 .editor-tb-sep { width: 1px; height: 18px; background: var(--line-2); margin: 0 4px; flex-shrink: 0; }
-.editor-content { min-height: 100px; padding: 10px 14px; font-size: 14px; line-height: 1.55; color: var(--ink); outline: none; }
-.editor-content .ProseMirror { outline: none; }
+.editor-content { min-height: 100px; padding: 10px 14px; font-size: 14px; line-height: 1.55; color: var(--ink); outline: none; cursor: text; }
+.editor-content .ProseMirror { outline: none; min-height: 80px; }
 .editor-content .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left; color: var(--muted); pointer-events: none; height: 0;

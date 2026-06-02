@@ -15,7 +15,7 @@ import { Errors } from '../../Shared/errors.js';
  *   POST  /requests     — CLIENT and above; project access checked if projectId supplied
  *   GET   /requests     — CLIENT and above; results scoped by role:
  *                         CLIENT     → own requests + requests in their orgs, within active projects
- *                         AGENT      → all requests in active projects (no org restriction)
+ *                         AGENT      → own requests + requests in their orgs, within active projects
  *                         ADMIN      → all requests in their tenant (optionally filtered by project)
  *                         SUPER_ADMIN→ all requests (optionally filtered by project)
  *   GET   /requests/:id — CLIENT and above; AGENT/CLIENT validated against project membership
@@ -106,13 +106,15 @@ export function registerRequestsEndpoints(
 
     } else if (role === 'AGENT') {
       // STRICT project scope — AGENT cannot see cross-project data under any circumstance.
-      // No org filtering for agents — they see all requests in their projects.
+      // Org-based visibility: own requests + requests in their orgs (same rule as CLIENT).
       if (query.projectId) {
         requireProjectAccess(req.user, query.projectId);
         filters.projectId = query.projectId;
       } else {
         filters.projectIds = req.user.projectIds ?? [];
       }
+      filters.createdBy       = req.user.email;
+      filters.organizationIds = req.user.organizationIds ?? [];
 
     } else {
       // CLIENT — own requests + requests in their orgs, within their assigned projects

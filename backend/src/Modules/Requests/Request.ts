@@ -12,10 +12,11 @@ export const REQUEST_TYPES = [
 export type RequestType = typeof REQUEST_TYPES[number];
 
 export interface Request {
-  id:              string;
-  clientId:        string;
-  projectId:       string | null;    // project this request belongs to
-  organizationId:  string | null;    // optional org scope for ticket visibility
+  id:               string;
+  clientId:         string;
+  projectId:        string | null;    // project this request belongs to
+  organizationId:   string | null;    // optional org scope for ticket visibility
+  organizationName: string | null;    // denormalized from Organization.name for list views
   templateId:      string | null;    // which FormTemplate produced this request
   reference:       string;           // e.g. CBLPBR-629
   requestType:     RequestType;

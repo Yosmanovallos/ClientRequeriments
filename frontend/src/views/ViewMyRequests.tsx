@@ -45,7 +45,7 @@ export default function ViewMyRequests() {
     r.reference.toLowerCase().includes(query.toLowerCase())
   );
 
-  const cols = ['Type', 'Reference', 'Summary', 'Status', 'Service project', 'Created', 'Updated', 'Due', 'Priority'];
+  const cols = ['Type', 'Reference', 'Summary', 'Status', 'Service project', 'Organization', 'Created', 'Updated', 'Due', 'Priority'];
 
   return (
     <div className="view view-reqlist">
@@ -89,6 +89,7 @@ export default function ViewMyRequests() {
                           <td className="t-sum">{r.title}</td>
                           <td><span className={`badge badge-${color}`}>{r.status}</span></td>
                           <td className="t-proj">{TYPE_LABEL[r.requestType] ?? r.requestType}</td>
+                          <td className="t-proj">{r.organizationName ?? '—'}</td>
                           <td className="t-date">{fmtDate(r.createdAt)}</td>
                           <td className="t-date">{fmtDate(r.updatedAt)}</td>
                           <td className="t-date">{r.dueDate ? fmtDate(r.dueDate) : '—'}</td>

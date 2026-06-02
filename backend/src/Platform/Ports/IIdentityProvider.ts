@@ -15,6 +15,11 @@ export interface UserIdentity {
   organizationIds?: string[];
   /** Whether the user account is currently active. Enriched in middleware. */
   isActive?:   boolean;
+  /**
+   * The portal_users.id primary key (UUID). Distinct from userId (auth provider sub).
+   * Enriched in middleware. Use this for FK references to portal_users (e.g. comments.author_user_id).
+   */
+  portalUserId?: string;
 }
 
 export interface IIdentityProvider {

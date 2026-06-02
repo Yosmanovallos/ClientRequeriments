@@ -201,10 +201,12 @@ const CommentEditor = forwardRef<CommentEditorHandle, Props>(
             onChange={handleFileChange}
           />
         </div>
-        <EditorContent
-          editor={editor}
+        <div
           className="editor-content"
-        />
+          onClick={() => editor.commands.focus()}
+        >
+          <EditorContent editor={editor} />
+        </div>
       </div>
     );
   },

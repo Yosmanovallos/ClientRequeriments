@@ -35,10 +35,11 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
   async create(cmd: CreateRequestCmd & { id: string; reference: string }): Promise<Request> {
     const now = new Date();
     const req: Request = {
-      id:             cmd.id,
-      clientId:       cmd.clientId,
-      projectId:      cmd.projectId,
-      organizationId: cmd.organizationId,
+      id:               cmd.id,
+      clientId:         cmd.clientId,
+      projectId:        cmd.projectId,
+      organizationId:   cmd.organizationId,
+      organizationName: null,
       templateId:     cmd.templateId ?? null,
       reference:      cmd.reference,
       requestType:    cmd.requestType,
