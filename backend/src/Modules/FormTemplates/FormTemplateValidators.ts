@@ -30,9 +30,10 @@ const FormFieldDefSchema = z.object({
   placeholder:    z.string().max(255).optional(),
   helpText:       z.string().max(500).optional(),
   options:        z.array(z.string().min(1).max(128)).optional(),
-  sortOrder:      z.number().int().min(0).max(999),
-  defaultVisible: z.boolean().optional(),
-  conditions:     z.array(ConditionalRuleSchema).max(20).optional(),
+  sortOrder:       z.number().int().min(0).max(999),
+  defaultVisible:  z.boolean().optional(),
+  displayLocation: z.enum(['left', 'right', 'hidden']).optional(),
+  conditions:      z.array(ConditionalRuleSchema).max(20).optional(),
 }).refine(
   (f) => !OPTION_TYPES.includes(f.type as typeof OPTION_TYPES[number]) || (Array.isArray(f.options) && f.options.length > 0),
   { message: 'select/radio/checkbox fields must have at least one option' },

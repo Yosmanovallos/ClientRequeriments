@@ -10,6 +10,7 @@ import { attachmentsApi } from '../api/attachments';
 export interface CommentEditorHandle {
   clearContent(): void;
   isEmpty(): boolean;
+  focus(): void;
 }
 
 interface Props {
@@ -124,6 +125,7 @@ const CommentEditor = forwardRef<CommentEditorHandle, Props>(
         onChange('');
       },
       isEmpty: () => !editor || editor.isEmpty,
+      focus: () => editor?.commands.focus(),
     }));
 
     if (!editor) return null;

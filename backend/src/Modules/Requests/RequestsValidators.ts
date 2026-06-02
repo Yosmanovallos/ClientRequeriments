@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { REQUEST_TYPES } from './Request';
+
+const SLUG_RX = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 export const CreateRequestSchema = z.object({
-  requestType:    z.enum(REQUEST_TYPES),
+  requestType:    z.string().regex(SLUG_RX, 'requestType must be a valid form-template slug'),
   title:          z.string().min(1).max(255),
   priority:       z.enum(['Highest', 'High', 'Medium', 'Low', 'Lowest']).default('Medium'),
   dueDate:        z.string().date().nullable().optional(),

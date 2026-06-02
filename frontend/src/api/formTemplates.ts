@@ -41,9 +41,10 @@ export interface FormFieldDef {
   placeholder?:    string;
   helpText?:       string;        // gray hint text shown below the input
   options?:        string[];      // for select / radio / checkbox
-  sortOrder:       number;
-  defaultVisible?: boolean;       // true if omitted
-  conditions?:     ConditionalRule[];
+  sortOrder:        number;
+  defaultVisible?:  boolean;       // true if omitted
+  displayLocation?: 'left' | 'right' | 'hidden';
+  conditions?:      ConditionalRule[];
 }
 
 export interface FormTemplate {

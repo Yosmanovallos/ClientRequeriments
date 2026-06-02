@@ -5,11 +5,12 @@ export const REQUEST_STATUSES = [
 
 export type RequestStatus = typeof REQUEST_STATUSES[number];
 
+/** Legacy built-in types kept for reference; requestType now accepts any form-template slug. */
 export const REQUEST_TYPES = [
   'new_report', 'new_page', 'new_feature', 'fix_issue', 'view_request',
 ] as const;
 
-export type RequestType = typeof REQUEST_TYPES[number];
+export type RequestType = string;
 
 export interface Request {
   id:               string;

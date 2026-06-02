@@ -47,15 +47,16 @@ interface ConditionalRuleDraft {
 }
 
 interface FieldDraft {
-  name:           string;
-  label:          string;
-  type:           FieldType;
-  required:       boolean;
-  placeholder:    string;
-  helpText:       string;
-  options:        string; // comma-separated; used for select/radio/checkbox
-  defaultVisible: boolean;
-  conditions:     ConditionalRuleDraft[];
+  name:            string;
+  label:           string;
+  type:            FieldType;
+  required:        boolean;
+  placeholder:     string;
+  helpText:        string;
+  options:         string; // comma-separated; used for select/radio/checkbox
+  defaultVisible:  boolean;
+  displayLocation: 'left' | 'right' | 'hidden';
+  conditions:      ConditionalRuleDraft[];
 }
 
 function autoSlug(s: string) {
@@ -70,7 +71,7 @@ function blankField(): FieldDraft {
   return {
     name: '', label: '', type: 'text', required: false,
     placeholder: '', helpText: '', options: '',
-    defaultVisible: true, conditions: [],
+    defaultVisible: true, displayLocation: 'left', conditions: [],
   };
 }
 
@@ -86,15 +87,16 @@ function templateToFieldDrafts(tpl: FormTemplate): FieldDraft[] {
   return [...tpl.fieldSchema]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map(f => ({
-      name:           f.name,
-      label:          f.label,
-      type:           f.type as FieldType,
-      required:       f.required,
-      placeholder:    f.placeholder ?? '',
-      helpText:       f.helpText ?? '',
-      options:        f.options?.join(', ') ?? '',
-      defaultVisible: f.defaultVisible ?? true,
-      conditions:     (f.conditions ?? []).map(r => ({
+      name:            f.name,
+      label:           f.label,
+      type:            f.type as FieldType,
+      required:        f.required,
+      placeholder:     f.placeholder ?? '',
+      helpText:        f.helpText ?? '',
+      options:         f.options?.join(', ') ?? '',
+      defaultVisible:  f.defaultVisible ?? true,
+      displayLocation: (f.displayLocation ?? 'left') as 'left' | 'right' | 'hidden',
+      conditions:      (f.conditions ?? []).map(r => ({
         when:         r.when.map(c => ({ fieldName: c.fieldName, operator: c.operator, value: c.value })),
         logic:        (r.logic ?? 'AND') as 'AND' | 'OR',
         visibility:   r.visibility,
@@ -380,6 +382,7 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
         def.options = f.options.split(',').map(o => o.trim()).filter(Boolean);
       }
       if (!f.defaultVisible) def.defaultVisible = false;
+      if (f.displayLocation !== 'left') def.displayLocation = f.displayLocation;
       const validRules: ConditionalRule[] = f.conditions
         .filter(r => r.when.some(c => c.fieldName && c.operator) && (r.visibility !== undefined || r.requirement !== undefined))
         .map(r => ({
@@ -546,10 +549,25 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
                 placeholder="Optional hint for the user" />
             </div>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--ink)' }}>
-              <input type="checkbox" checked={f.required} onChange={e => updateField(i, { required: e.target.checked })} />
-              Required field
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 4, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--ink)' }}>
+                <input type="checkbox" checked={f.required} onChange={e => updateField(i, { required: e.target.checked })} />
+                Required field
+              </label>
+              <div className="field" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label className="field-label" style={{ fontSize: 12, margin: 0, whiteSpace: 'nowrap' }}>Output Display Location</label>
+                <select
+                  className="txt"
+                  value={f.displayLocation}
+                  onChange={e => updateField(i, { displayLocation: e.target.value as FieldDraft['displayLocation'] })}
+                  style={{ height: 32, fontSize: 12, width: 200 }}
+                >
+                  <option value="left">Left Panel (Request Details)</option>
+                  <option value="right">Right Side Panel (Meta Context)</option>
+                  <option value="hidden">Hidden from Client</option>
+                </select>
+              </div>
+            </div>
 
             {/* Conditions panel */}
             {fields.length > 1 && (
