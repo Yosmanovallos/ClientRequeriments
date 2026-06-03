@@ -5,7 +5,7 @@
  * Reference: https://learn.microsoft.com/en-us/azure/devops/service-hooks/events
  *
  * Event types we handle:
- *   - workitem.updated   — fired when fields change (we care if System.State changed)
+ *   - workitem.updated   — fired when fields change (State, AssignedTo, Priority, TargetDate, Title, AttachedFileCount)
  *   - workitem.commented — fired when the System.History field (the comment thread) gets a new entry
  *
  * Event types we ignore (200 OK without action):
@@ -27,6 +27,13 @@ export interface FieldDiff<T = unknown> {
   newValue?: T;
 }
 
+/** Identity object ADO uses for user fields (System.AssignedTo, System.CreatedBy, etc.) */
+export interface AdoIdentity {
+  displayName?: string;
+  uniqueName?:  string;
+  id?:          string;
+}
+
 export interface AzureDevOpsWorkItemUpdatedPayload {
   id:        string;     // delivery UUID — used for dedup
   eventType: 'workitem.updated' | string;
@@ -36,9 +43,14 @@ export interface AzureDevOpsWorkItemUpdatedPayload {
     rev:           number;
     revisedBy?:    { displayName?: string; uniqueName?: string };
     fields: {
-      'System.State'?:  FieldDiff<string>;
-      'System.Reason'?: FieldDiff<string>;
-      [field: string]:  FieldDiff | undefined;
+      'System.State'?:                           FieldDiff<string>;
+      'System.Reason'?:                          FieldDiff<string>;
+      'System.AssignedTo'?:                      FieldDiff<AdoIdentity | string | null>;
+      'System.Title'?:                           FieldDiff<string>;
+      'System.AttachedFileCount'?:               FieldDiff<number>;
+      'Microsoft.VSTS.Common.Priority'?:         FieldDiff<number>;
+      'Microsoft.VSTS.Scheduling.TargetDate'?:   FieldDiff<string | null>;
+      [field: string]:                           FieldDiff | undefined;
     };
   };
 }
@@ -47,11 +59,18 @@ export interface AzureDevOpsWorkItemCommentedPayload {
   id:        string;
   eventType: 'workitem.commented' | string;
   resource: {
-    id?:         number;
+    id?:         number;    // may be comment ID in newer API versions
     workItemId?: number;
     revisedBy?:  { displayName?: string; uniqueName?: string };
+    /** Newer ADO API (7.1+): comment is a nested object */
+    comment?: {
+      id?:          number;
+      text?:        string;
+      createdBy?:   { displayName?: string };
+      createdDate?: string;
+    };
     fields?: {
-      // ADO surfaces comment text via the History field on this event
+      // ADO surfaces comment text via the History field on this event (older API)
       'System.History'?: string | { newValue?: string };
       [field: string]:  unknown;
     };

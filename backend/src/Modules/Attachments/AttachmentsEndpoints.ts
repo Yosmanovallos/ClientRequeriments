@@ -17,6 +17,7 @@ export function registerAttachmentsEndpoints(
     attachments: attachmentsRepo,
     requests:    requestsRepo,
     storage:     container.storage,
+    tickets:     container.tickets,
   });
 
   // POST /requests/:id/attachments  — multipart/form-data with field "file"

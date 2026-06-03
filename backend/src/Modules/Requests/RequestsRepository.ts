@@ -19,8 +19,13 @@ export interface IRequestsRepository {
   list(clientId: string, filters?: ListRequestsFilters): Promise<Request[]>;
   updateStatus(id: string, toStatus: string, fromStatus: string, source: string, actor: string | null): Promise<void>;
   saveExternalRef(id: string, externalId: string, externalUrl: string): Promise<void>;
-  /** Patch ADO-synced metadata (assigned-to, etc.) without touching status or other fields. */
-  updateAdoMeta(id: string, meta: { adoAssignedTo?: string | null }): Promise<void>;
+  /** Patch ADO-synced metadata (assigned-to, priority, due date, title) without touching status or other fields. */
+  updateAdoMeta(id: string, meta: {
+    adoAssignedTo?: string | null;
+    priority?: string;
+    dueDate?: Date | null;
+    title?: string;
+  }): Promise<void>;
   getHistory(requestId: string): Promise<StatusHistoryEntry[]>;
   nextReference(clientId: string, prefix: string): Promise<string>;
 }
@@ -116,10 +121,18 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
     if (r) { r.adoWorkItemId = externalId; r.adoWorkItemUrl = externalUrl; }
   }
 
-  async updateAdoMeta(id: string, meta: { adoAssignedTo?: string | null }): Promise<void> {
+  async updateAdoMeta(id: string, meta: {
+    adoAssignedTo?: string | null;
+    priority?: string;
+    dueDate?: Date | null;
+    title?: string;
+  }): Promise<void> {
     const r = this.requests.get(id);
     if (!r) return;
     if (meta.adoAssignedTo !== undefined) r.adoAssignedTo = meta.adoAssignedTo;
+    if (meta.priority !== undefined) r.priority = meta.priority;
+    if (meta.dueDate !== undefined) r.dueDate = meta.dueDate;
+    if (meta.title !== undefined) r.title = meta.title;
     r.updatedAt = new Date();
   }
 

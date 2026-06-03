@@ -1,5 +1,5 @@
 import type {
-  ITicketSystem, CreateTicketCmd, TicketRef,
+  ITicketSystem, CreateTicketCmd, TicketRef, AttachmentUploadResult,
   ExternalProject, WorkItemFilters, WorkItemSummary, WorkItemDetail, ExternalComment,
 } from '../../Ports/ITicketSystem';
 
@@ -34,10 +34,29 @@ export class LocalTicketSystem implements ITicketSystem {
     console.log(`[LocalTicketSystem] ${externalId} → ${status}`);
   }
 
-  async addComment(externalId: string, body: string, _targetProjectId?: string): Promise<void> {
+  async addComment(externalId: string, body: string, _targetProjectId?: string): Promise<{ id: string } | null> {
     const issue = this.issues.get(externalId);
     if (issue) issue.comments.push(body);
     console.log(`[LocalTicketSystem] Comment on ${externalId}: ${body.slice(0, 60)}`);
+    return null;
+  }
+
+  async uploadAttachment(
+    _fileName: string,
+    _data: Buffer,
+    _contentType: string,
+    _targetProjectId?: string,
+  ): Promise<AttachmentUploadResult | null> {
+    return null;
+  }
+
+  async linkAttachmentToWorkItem(
+    _externalId: string,
+    _adoAttachmentUrl: string,
+    _fileName: string,
+    _targetProjectId?: string,
+  ): Promise<void> {
+    // no-op
   }
 
   async listExternalProjects(): Promise<ExternalProject[]> {

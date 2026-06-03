@@ -1,5 +1,5 @@
 import type {
-  ITicketSystem, CreateTicketCmd, TicketRef,
+  ITicketSystem, CreateTicketCmd, TicketRef, AttachmentUploadResult,
   ExternalProject, WorkItemFilters, WorkItemSummary, WorkItemDetail, ExternalComment,
 } from '../../Ports/ITicketSystem.js';
 
@@ -74,8 +74,27 @@ export class GitHubIssuesTicketSystem implements ITicketSystem {
     await this.api('PATCH', `/issues/${externalId}`, body);
   }
 
-  async addComment(externalId: string, body: string, _targetProjectId?: string): Promise<void> {
+  async addComment(externalId: string, body: string, _targetProjectId?: string): Promise<{ id: string } | null> {
     await this.api('POST', `/issues/${externalId}/comments`, { body });
+    return null;
+  }
+
+  async uploadAttachment(
+    _fileName: string,
+    _data: Buffer,
+    _contentType: string,
+    _targetProjectId?: string,
+  ): Promise<AttachmentUploadResult | null> {
+    return null;
+  }
+
+  async linkAttachmentToWorkItem(
+    _externalId: string,
+    _adoAttachmentUrl: string,
+    _fileName: string,
+    _targetProjectId?: string,
+  ): Promise<void> {
+    // no-op
   }
 
   async listExternalProjects(): Promise<ExternalProject[]> {

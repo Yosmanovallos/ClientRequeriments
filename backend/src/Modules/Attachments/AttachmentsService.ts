@@ -2,12 +2,16 @@ import type { Attachment, AttachmentView, UploadAttachmentCmd } from './Attachme
 import type { IAttachmentsRepository } from './AttachmentsRepository.js';
 import type { IRequestsRepository }    from '../Requests/RequestsRepository.js';
 import type { IFileStorage }           from '../../Platform/Ports/IFileStorage.js';
+import type { ITicketSystem }          from '../../Platform/Ports/ITicketSystem.js';
+import type { Request }                from '../Requests/Request.js';
 import { Errors }                      from '../../Shared/errors.js';
 
 interface Deps {
   attachments: IAttachmentsRepository;
   requests:    IRequestsRepository;
   storage:     IFileStorage;
+  /** When provided, newly uploaded attachments are synced to ADO work items. */
+  tickets?:    ITicketSystem;
   /** Default signed-URL lifetime in seconds. 1 hour is a reasonable safety net. */
   signedUrlSeconds?: number;
 }
@@ -34,17 +38,30 @@ export class AttachmentsService {
 
     const att: Attachment = {
       id,
-      requestId:   cmd.requestId,
-      clientId:    cmd.clientId,
-      commentId:   cmd.commentId ?? null,
-      fileName:    cmd.fileName,
-      contentType: cmd.contentType,
-      size:        cmd.data.length,
-      storageKey:  key,
-      uploadedBy:  cmd.uploadedBy,
-      uploadedAt:  new Date(),
+      requestId:        cmd.requestId,
+      clientId:         cmd.clientId,
+      commentId:        cmd.commentId ?? null,
+      fileName:         cmd.fileName,
+      contentType:      cmd.contentType,
+      size:             cmd.data.length,
+      storageKey:       key,
+      uploadedBy:       cmd.uploadedBy,
+      adoAttachmentId:  null,
+      adoAttachmentUrl: null,
+      uploadedAt:       new Date(),
     };
     const saved = await this.deps.attachments.add(att);
+
+    // Non-blocking ADO attachment sync
+    if (req.adoWorkItemId && this.deps.tickets) {
+      this.syncAttachmentToAdo(saved, cmd.data, req).catch(err =>
+        console.error(
+          `[AttachmentsService] ADO sync failed for "${saved.fileName}" → workItem ${req.adoWorkItemId}:`,
+          (err as Error).message ?? err,
+        ),
+      );
+    }
+
     const signedUrl = await this.deps.storage.getSignedUrl(saved.storageKey, this.signedUrlSeconds);
     return { ...saved, signedUrl };
   }
@@ -70,5 +87,27 @@ export class AttachmentsService {
     // We accept this trade-off: orphans in DB are cheap and reconcilable; orphans in storage cost money.
     await this.deps.storage.delete(att.storageKey);
     await this.deps.attachments.remove(id, clientId);
+  }
+
+  // ── private helpers ───────────────────────────────────────────────────────
+
+  private async syncAttachmentToAdo(att: Attachment, data: Buffer, req: Request): Promise<void> {
+    const tickets = this.deps.tickets!;
+    const result = await tickets.uploadAttachment(
+      att.fileName,
+      data,
+      att.contentType,
+      req.adoProjectName ?? undefined,
+    );
+    if (!result) return; // non-ADO adapter
+
+    await tickets.linkAttachmentToWorkItem(
+      req.adoWorkItemId!,
+      result.adoUrl,
+      att.fileName,
+      req.adoProjectName ?? undefined,
+    );
+
+    await this.deps.attachments.setAdoRef(att.id, result.adoId, result.adoUrl);
   }
 }

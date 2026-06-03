@@ -13,6 +13,11 @@ const CLIENT_PREFIX: Record<string, string> = {
   '00000000-0000-0000-0000-000000000001': 'CBLPBR',
 };
 
+/** Portal priority string → ADO integer (1–4). Matches Microsoft.VSTS.Common.Priority. */
+const PRIORITY_MAP: Record<string, number> = {
+  Highest: 1, High: 2, Medium: 3, Low: 4, Lowest: 4,
+};
+
 interface Deps {
   repo:          IRequestsRepository;
   tickets:       ITicketSystem;
@@ -94,8 +99,11 @@ export class RequestsService {
     return true;
   }
 
-  /** Patch ADO-synced metadata (assigned-to, etc.) when a webhook reports a change. */
-  async updateAdoMeta(externalId: string, meta: { adoAssignedTo?: string | null }): Promise<void> {
+  /** Patch ADO-synced metadata from a webhook without touching status. */
+  async updateAdoMeta(
+    externalId: string,
+    meta: { adoAssignedTo?: string | null; priority?: string; dueDate?: Date | null; title?: string },
+  ): Promise<void> {
     const req = await this.deps.repo.findByExternalRef(externalId);
     if (!req) return;
     await this.deps.repo.updateAdoMeta(req.id, meta);
@@ -142,15 +150,20 @@ export class RequestsService {
   }
 
   private async createTicketAsync(req: Request, requesterEmail: string): Promise<void> {
-    const payload = JSON.parse(req.payload) as Record<string, string>;
+    const payload   = JSON.parse(req.payload) as Record<string, unknown>;
+    const fieldDefs = req.templateId && this.deps.formTemplates
+      ? (await this.deps.formTemplates.findById(req.templateId))?.fieldSchema ?? []
+      : [];
+
     const ref = await this.deps.tickets.create({
       title:            `[${req.reference}] ${req.title}`,
-      body:             this.buildTicketBody(req, payload),
+      body:             this.buildHtmlBody(req, payload, fieldDefs),
       priority:         req.priority,
       requestReference: req.reference,
       requestType:      req.requestType,
       requesterEmail,
       targetProjectId:  req.adoProjectName ?? undefined,
+      nativeFields:     this.buildNativeFields(req),
     });
     await this.deps.repo.saveExternalRef(req.id, ref.externalId, ref.externalUrl);
 
@@ -165,18 +178,77 @@ export class RequestsService {
     });
   }
 
-  private buildTicketBody(req: Request, payload: Record<string, string>): string {
-    return [
-      `**Reference:** ${req.reference}`,
-      `**Type:** ${req.requestType}`,
-      `**Priority:** ${req.priority}`,
-      req.dueDate ? `**Due:** ${req.dueDate.toISOString().slice(0, 10)}` : null,
-      '',
-      '---',
-      ...Object.entries(payload).map(([k, v]) => `**${k}:** ${v}`),
-    ]
-      .filter(l => l !== null)
-      .join('\n');
+  /** Build native ADO field name → value pairs to be applied alongside the base patch ops. */
+  private buildNativeFields(req: Request): Record<string, unknown> {
+    const fields: Record<string, unknown> = {};
+
+    const priority = PRIORITY_MAP[req.priority];
+    if (priority != null) {
+      fields['Microsoft.VSTS.Common.Priority'] = priority;
+    }
+
+    if (req.dueDate) {
+      const iso = req.dueDate instanceof Date
+        ? req.dueDate.toISOString().slice(0, 10)
+        : String(req.dueDate);
+      fields['Microsoft.VSTS.Scheduling.TargetDate'] = `${iso}T00:00:00.000Z`;
+    }
+
+    return fields;
+  }
+
+  private buildHtmlBody(
+    req:       Request,
+    payload:   Record<string, unknown>,
+    fieldDefs: FormFieldDef[],
+  ): string {
+    const labelMap = new Map(fieldDefs.map(f => [f.name, f.label]));
+
+    const dueDateStr = req.dueDate
+      ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          .format(req.dueDate instanceof Date ? req.dueDate : new Date(req.dueDate))
+      : 'Not set';
+
+    const baseRows = [
+      ['Reference',    req.reference],
+      ['Request Type', req.requestType],
+      ['Priority',     req.priority],
+      ['Due Date',     dueDateStr],
+    ].map(([label, value]) => this.tr(label, escapeHtml(value))).join('');
+
+    // Render each payload field except known system fields
+    const SKIP = new Set(['priority', 'dueDate', 'due_date', 'attachment']);
+    let notesSections = '';
+    const payloadRows = Object.entries(payload)
+      .filter(([key]) => !SKIP.has(key))
+      .map(([key, val]) => {
+        const label = labelMap.get(key) ?? prettifyKey(key);
+        const fieldDef = fieldDefs.find(f => f.name === key);
+
+        if (fieldDef?.type === 'richtext' && typeof val === 'string' && val) {
+          // Rich text goes into a separate section below the table
+          notesSections += `<h2>${escapeHtml(label)}</h2><div>${val}</div>`;
+          return null;
+        }
+        if (fieldDef?.type === 'attachment') return null;
+
+        const display = Array.isArray(val)
+          ? escapeHtml(val.join(', '))
+          : val == null ? '' : escapeHtml(String(val));
+        return this.tr(label, display);
+      })
+      .filter(Boolean)
+      .join('');
+
+    return `<h2>Request Information</h2>
+<table style="border-collapse:collapse;width:100%">${baseRows}${payloadRows}</table>
+${notesSections}
+<hr/>
+<p style="color:#888;font-size:12px">Submitted via Provana Portal</p>`;
+  }
+
+  private tr(label: string, value: string): string {
+    return `<tr><td style="padding:6px 12px;font-weight:bold;width:200px;vertical-align:top">${escapeHtml(label)}</td><td style="padding:6px 12px">${value}</td></tr>`;
   }
 
   private toSummary(r: Request): RequestSummary {
@@ -184,4 +256,22 @@ export class RequestsService {
     try { payloadData = JSON.parse(r.payload); } catch {}
     return { ...r, payloadData };
   }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function prettifyKey(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]+/g, ' ')
+    .replace(/^\s/, '')
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }

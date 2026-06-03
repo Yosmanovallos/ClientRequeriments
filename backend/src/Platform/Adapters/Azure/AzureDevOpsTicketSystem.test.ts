@@ -64,10 +64,11 @@ describe('AzureDevOpsTicketSystem', () => {
       expect(init.headers['Content-Type']).toBe('application/json-patch+json');
 
       const body = JSON.parse(init.body);
-      expect(body).toEqual([
+      // Base patch ops — nativeFields (Priority etc.) are appended after by RequestsService
+      expect(body.slice(0, 3)).toEqual([
         { op: 'add', path: '/fields/System.Title',       value: '[CBLPBR-630] CLJ Productivity' },
         { op: 'add', path: '/fields/System.Description', value: 'Goal: track productivity' },
-        { op: 'add', path: '/fields/System.Tags',        value: 'CBLPBR-630; new_report; priority:high' },
+        { op: 'add', path: '/fields/System.Tags',        value: 'portal; new_report' },
       ]);
     });
 
@@ -117,7 +118,7 @@ describe('AzureDevOpsTicketSystem', () => {
       })).rejects.toThrow(/Azure DevOps POST .* failed: 400 The field "System\.Title" is required/);
     });
 
-    it('omits priority tag when priority not provided', async () => {
+    it('uses portal; {requestType} tag format (reference and priority are in native ADO fields)', async () => {
       fetchMock.mockResolvedValueOnce(workItemResponse());
       const sys = new AzureDevOpsTicketSystem(CONFIG);
       await sys.create({
@@ -126,7 +127,7 @@ describe('AzureDevOpsTicketSystem', () => {
 
       const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
       const tagsOp = body.find((op: { path: string }) => op.path === '/fields/System.Tags');
-      expect(tagsOp.value).toBe('R-1; fix_issue');
+      expect(tagsOp.value).toBe('portal; fix_issue');
     });
 
     it('uses targetProjectId from cmd over default project', async () => {
@@ -414,6 +415,96 @@ describe('AzureDevOpsTicketSystem', () => {
         { id: '10', body: 'First comment', author: 'Alice', createdAt: '2026-06-01T10:00:00Z' },
         { id: '11', body: 'Second',        author: 'Bob',   createdAt: '2026-06-02T11:00:00Z' },
       ]);
+    });
+  });
+
+  // ── uploadAttachment ─────────────────────────────────────────────────────
+
+  describe('uploadAttachment()', () => {
+    const ATT_URL = `${BASE}/attachments/att-guid-1?fileName=report.png`;
+    function attachmentResponse(): Response {
+      return new Response(JSON.stringify({ id: 'att-guid-1', url: ATT_URL }),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+
+    it('POSTs binary with application/octet-stream and returns adoId + adoUrl', async () => {
+      fetchMock.mockResolvedValueOnce(attachmentResponse());
+      const sys  = new AzureDevOpsTicketSystem(CONFIG);
+      const data = Buffer.from('fake-image-bytes');
+
+      const result = await sys.uploadAttachment('report.png', data, 'image/png');
+
+      const [url, init] = fetchMock.mock.calls[0]!;
+      expect(url).toBe(`https://dev.azure.com/acme/BLG-Reports/_apis/wit/attachments?fileName=report.png&api-version=7.1`);
+      expect(init.method).toBe('POST');
+      // ADO requires octet-stream regardless of the file's MIME type
+      expect(init.headers['Content-Type']).toBe('application/octet-stream');
+      expect(init.body).toBe(data);
+
+      expect(result).toEqual({ adoId: 'att-guid-1', adoUrl: ATT_URL });
+    });
+
+    it('URL-encodes filenames with spaces', async () => {
+      fetchMock.mockResolvedValueOnce(attachmentResponse());
+      const sys = new AzureDevOpsTicketSystem(CONFIG);
+      await sys.uploadAttachment('my file.pdf', Buffer.from('x'), 'application/pdf');
+
+      const [url] = fetchMock.mock.calls[0]!;
+      expect(url).toContain('fileName=my%20file.pdf');
+    });
+
+    it('uses targetProjectId when provided', async () => {
+      fetchMock.mockResolvedValueOnce(attachmentResponse());
+      const sys = new AzureDevOpsTicketSystem(CONFIG);
+      await sys.uploadAttachment('f.png', Buffer.from('x'), 'image/png', 'OtherProject');
+
+      const [url] = fetchMock.mock.calls[0]!;
+      expect(url).toContain('OtherProject');
+      expect(url).not.toContain('BLG-Reports');
+    });
+
+    it('throws with ADO error on non-2xx', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(
+        JSON.stringify({ message: 'Upload size exceeds limit' }),
+        { status: 413, headers: { 'content-type': 'application/json' } },
+      ));
+      const sys = new AzureDevOpsTicketSystem(CONFIG);
+      await expect(sys.uploadAttachment('f.png', Buffer.from('x'), 'image/png'))
+        .rejects.toThrow(/ADO attachment upload failed 413/);
+    });
+  });
+
+  // ── linkAttachmentToWorkItem ──────────────────────────────────────────────
+
+  describe('linkAttachmentToWorkItem()', () => {
+    it('PATCHes /workitems/{id} with AttachedFile relation', async () => {
+      fetchMock.mockResolvedValueOnce(workItemResponse(42));
+      const sys    = new AzureDevOpsTicketSystem(CONFIG);
+      const adoUrl = `${BASE}/attachments/att-guid-1?fileName=report.png`;
+
+      await sys.linkAttachmentToWorkItem('42', adoUrl, 'report.png');
+
+      const [url, init] = fetchMock.mock.calls[0]!;
+      expect(url).toBe(`${BASE}/workitems/42?api-version=7.1`);
+      expect(init.method).toBe('PATCH');
+      expect(init.headers['Content-Type']).toBe('application/json-patch+json');
+
+      const body = JSON.parse(init.body);
+      expect(body).toEqual([{
+        op:    'add',
+        path:  '/relations/-',
+        value: { rel: 'AttachedFile', url: adoUrl, attributes: { comment: 'report.png' } },
+      }]);
+    });
+
+    it('uses targetProjectId when provided', async () => {
+      fetchMock.mockResolvedValueOnce(workItemResponse(5));
+      const sys = new AzureDevOpsTicketSystem(CONFIG);
+      await sys.linkAttachmentToWorkItem('5', 'https://att.url', 'f.png', 'SomeProject');
+
+      const [url] = fetchMock.mock.calls[0]!;
+      expect(url).toContain('SomeProject');
+      expect(url).not.toContain('BLG-Reports');
     });
   });
 

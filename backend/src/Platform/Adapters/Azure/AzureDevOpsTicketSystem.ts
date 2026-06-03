@@ -1,5 +1,5 @@
 import type {
-  ITicketSystem, CreateTicketCmd, TicketRef,
+  ITicketSystem, CreateTicketCmd, TicketRef, AttachmentUploadResult,
   ExternalProject, WorkItemFilters, WorkItemSummary, WorkItemDetail, ExternalComment,
 } from '../../Ports/ITicketSystem.js';
 
@@ -20,6 +20,7 @@ import type {
  *   POST   /{org}/{project}/_apis/wit/workitems/${type}            → create
  *   PATCH  /{org}/{project}/_apis/wit/workitems/{id}               → update fields/state
  *   POST   /{org}/{project}/_apis/wit/workitems/{id}/comments       → add comment (preview api)
+ *   POST   /{org}/{project}/_apis/wit/attachments                  → upload attachment
  *   GET    /{org}/_apis/projects                                   → list projects
  *   POST   /{org}/{project}/_apis/wit/wiql                         → query work items
  *   GET    /{org}/{project}/_apis/wit/workitems                    → fetch work items by IDs
@@ -88,24 +89,37 @@ export class AzureDevOpsTicketSystem implements ITicketSystem {
 
   async create(cmd: CreateTicketCmd): Promise<TicketRef> {
     const project = this.resolveProject(cmd.targetProjectId);
-    const tags = [
-      cmd.requestReference,
-      cmd.requestType,
-      ...(cmd.priority ? [`priority:${cmd.priority.toLowerCase()}`] : []),
-      ...(cmd.labels ?? []),
-    ].join('; ');
 
-    const patch: PatchOp[] = [
+    // Tags: "portal; {requestType-slug}" — clean, filterable via WIQL
+    const tags = ['portal', cmd.requestType, ...(cmd.labels ?? [])].join('; ');
+
+    const basePatch: PatchOp[] = [
       { op: 'add', path: '/fields/System.Title',       value: cmd.title },
       { op: 'add', path: '/fields/System.Description', value: cmd.body },
       { op: 'add', path: '/fields/System.Tags',        value: tags },
     ];
 
-    const data = await this.patchApi<AdoWorkItem>(
-      'POST',
-      this.witUrl(project, `/workitems/$${encodeURIComponent(this.workItemType)}?api-version=7.1`),
-      patch,
-    );
+    // Append native fields (Priority, TargetDate, custom fields) from nativeFields map
+    const nativePatch: PatchOp[] = Object.entries(cmd.nativeFields ?? {}).map(([field, value]) => ({
+      op:    'add' as const,
+      path:  `/fields/${field}`,
+      value,
+    }));
+
+    const url = this.witUrl(project, `/workitems/$${encodeURIComponent(this.workItemType)}?api-version=7.1`);
+
+    // Try full patch; on 400 (unrecognized custom field or unavailable TargetDate) retry with base only
+    let data: AdoWorkItem;
+    try {
+      data = await this.patchApi<AdoWorkItem>('POST', url, [...basePatch, ...nativePatch]);
+    } catch (err) {
+      if (isAdoFieldError(err) && nativePatch.length > 0) {
+        console.warn('[AzureDevOpsTicketSystem] Native field patch failed — retrying with base fields only');
+        data = await this.patchApi<AdoWorkItem>('POST', url, basePatch);
+      } else {
+        throw err;
+      }
+    }
 
     const htmlUrl = data._links?.html?.href
       ?? `${(this.config.apiUrl ?? 'https://dev.azure.com').replace(/\/$/, '')}/${this.config.org}/${project}/_workitems/edit/${data.id}`;
@@ -135,12 +149,65 @@ export class AzureDevOpsTicketSystem implements ITicketSystem {
     );
   }
 
-  async addComment(externalId: string, body: string, targetProjectId?: string): Promise<void> {
+  async addComment(externalId: string, body: string, targetProjectId?: string): Promise<{ id: string } | null> {
     const project = this.resolveProject(targetProjectId);
-    await this.jsonApi(
+    const data = await this.jsonApi<{ id: number; text: string }>(
       'POST',
       this.witUrl(project, `/workitems/${encodeURIComponent(externalId)}/comments?api-version=7.1-preview.3`),
       { text: body },
+    );
+    return { id: String(data.id) };
+  }
+
+  async uploadAttachment(
+    fileName:        string,
+    data:            Buffer,
+    contentType:     string,
+    targetProjectId?: string,
+  ): Promise<AttachmentUploadResult | null> {
+    const project    = this.resolveProject(targetProjectId);
+    const encodedName = encodeURIComponent(fileName);
+    const url        = `${this.baseOrg}/${encodeURIComponent(project)}/_apis/wit/attachments?fileName=${encodedName}&api-version=7.1`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': this.authHeader,
+        // ADO attachment API requires application/octet-stream regardless of the file's MIME type.
+        'Content-Type':  'application/octet-stream',
+        'Accept':        'application/json',
+      },
+      body: data,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`ADO attachment upload failed ${res.status}: ${text}`);
+    }
+
+    const result = await res.json() as { id: string; url: string };
+    return { adoId: result.id, adoUrl: result.url };
+  }
+
+  async linkAttachmentToWorkItem(
+    externalId:       string,
+    adoAttachmentUrl: string,
+    fileName:         string,
+    targetProjectId?: string,
+  ): Promise<void> {
+    const project = this.resolveProject(targetProjectId);
+    await this.patchApi(
+      'PATCH',
+      this.witUrl(project, `/workitems/${encodeURIComponent(externalId)}?api-version=7.1`),
+      [{
+        op:    'add',
+        path:  '/relations/-',
+        value: {
+          rel:        'AttachedFile',
+          url:        adoAttachmentUrl,
+          attributes: { comment: fileName },
+        },
+      }],
     );
   }
 
@@ -331,4 +398,11 @@ interface AdoCommentListResponse {
     createdBy?:  { displayName?: string };
   }>;
   totalCount?: number;
+}
+
+/** Returns true when an ADO error indicates an unrecognized or unavailable field. */
+function isAdoFieldError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return msg.includes('400') || msg.includes('tfs.workitemtracking') || msg.includes('field');
 }

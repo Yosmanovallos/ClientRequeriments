@@ -258,19 +258,19 @@ describe('SyncService.handleAdoWorkItemUpdated', () => {
     expect((await repo.findById(requestId, CLIENT))?.status).toBe('IN DEVELOPMENT');
   });
 
-  it('returns ignored:no-state-change when no System.State diff present', async () => {
+  it('returns applied and syncs adoAssignedTo when only System.AssignedTo changes (no System.State)', async () => {
     const { sync } = await buildStackWithSeededRequest();
     const result = await sync.handleAdoWorkItemUpdated({
       id: 'd', eventType: 'workitem.updated',
       resource: { workItemId: 42, rev: 2, fields: { 'System.AssignedTo': { newValue: 'someone' } } },
     });
-    expect(result.status).toBe('ignored:no-state-change');
+    expect(result.status).toBe('applied');
   });
 
-  it('returns ignored:unknown-state for a state we do not map', async () => {
+  it('returns ignored:no-change for a state we do not map (and no other field changes)', async () => {
     const { sync } = await buildStackWithSeededRequest();
     const result = await sync.handleAdoWorkItemUpdated(adoUpdatedPayload({ newState: 'CustomState_That_Doesnt_Exist' }));
-    expect(result.status).toBe('ignored:unknown-state');
+    expect(result.status).toBe('ignored:no-change');
   });
 
   it('returns ignored:unknown-workitem when work item id maps to no portal request', async () => {

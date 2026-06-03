@@ -19,6 +19,11 @@ interface Deps {
  */
 const REOPEN_TARGET: RequestStatus = 'IN REVIEW';
 
+/** ADO integer priority → portal priority string. */
+const PRIORITY_REVERSE_MAP: Record<number, string> = {
+  1: 'High', 2: 'High', 3: 'Medium', 4: 'Low',
+};
+
 /** Map (GitHub state, state_reason) → portal status. Returns null when there's no defined mapping. */
 function mapGithubStateToStatus(state: string, stateReason: string | null): RequestStatus | null {
   if (state === 'closed' && stateReason === 'completed')   return 'DONE';
@@ -34,9 +39,6 @@ function mapGithubStateToStatus(state: string, stateReason: string | null): Requ
  * Covers the three standard process templates (Agile / Scrum / Basic) plus CMMI overlap.
  * Ambiguous reverse mappings (e.g. ADO `New` could correspond to portal `NEW`, `IN REVIEW`,
  * `APPROVED`, or `ON HOLD`) default to the most useful re-triage state.
- *
- * For custom processes / renamed states, users override via the inverse of `ADO_STATE_MAP_JSON`
- * (deferred to a future task — for now custom states return null and the event is silently ignored).
  */
 function mapAdoStateToStatus(state: string): RequestStatus | null {
   switch (state) {
@@ -68,7 +70,7 @@ export interface CommentEventResult {
 }
 
 export interface AdoUpdatedEventResult {
-  status: 'applied' | 'ignored:no-state-change' | 'ignored:unknown-state' | 'ignored:unknown-workitem' | 'ignored:missing-workitem-id';
+  status: 'applied' | 'ignored:no-change' | 'ignored:unknown-workitem' | 'ignored:missing-workitem-id';
   mappedTo?: RequestStatus;
 }
 
@@ -80,7 +82,7 @@ export interface AdoCommentedEventResult {
  * SyncService — orchestrates external-system events into portal state changes.
  *
  * Endpoints are responsible for HTTP-layer concerns (HMAC, dedup, response shape).
- * This class owns the *semantic* mapping: GitHub event → portal effect.
+ * This class owns the *semantic* mapping: external event → portal effect.
  */
 export class SyncService {
   constructor(private readonly deps: Deps) {}
@@ -118,51 +120,109 @@ export class SyncService {
     const wiId = payload.resource.workItemId ?? payload.resource.id;
     if (wiId == null) return { status: 'ignored:missing-workitem-id' };
 
-    const stateDiff = payload.resource.fields['System.State'];
-    if (!stateDiff?.newValue) return { status: 'ignored:no-state-change' };
-
-    const target = mapAdoStateToStatus(stateDiff.newValue);
-    if (!target) return { status: 'ignored:unknown-state' };
-
+    const wiStr = String(wiId);
     const actor = payload.resource.revisedBy?.uniqueName
       ?? payload.resource.revisedBy?.displayName
       ?? null;
 
-    const applied = await this.deps.requests.applyExternalStatus(
-      String(wiId), target, 'azuredevops', actor,
-    );
-    if (!applied) return { status: 'ignored:unknown-workitem' };
+    const fields = payload.resource.fields;
+    const metaUpdates: {
+      adoAssignedTo?: string | null;
+      priority?: string;
+      dueDate?: Date | null;
+      title?: string;
+    } = {};
+    let statusApplied: RequestStatus | undefined;
 
-    // Also sync AssignedTo when it changed in this revision
-    const assignedToDiff = payload.resource.fields['System.AssignedTo'];
-    if (assignedToDiff?.newValue !== undefined) {
-      const assignedTo = typeof assignedToDiff.newValue === 'string'
-        ? assignedToDiff.newValue || null
-        : (assignedToDiff.newValue as { displayName?: string } | null)?.displayName ?? null;
-      await this.deps.requests.updateAdoMeta(String(wiId), { adoAssignedTo: assignedTo });
+    // 1. State change
+    const stateDiff = fields['System.State'];
+    if (stateDiff?.newValue) {
+      const target = mapAdoStateToStatus(stateDiff.newValue);
+      if (target) {
+        const applied = await this.deps.requests.applyExternalStatus(wiStr, target, 'azuredevops', actor);
+        if (!applied) return { status: 'ignored:unknown-workitem' };
+        statusApplied = target;
+      }
     }
 
-    return { status: 'applied', mappedTo: target };
+    // 2. AssignedTo change
+    const assignedToDiff = fields['System.AssignedTo'];
+    if (assignedToDiff !== undefined && 'newValue' in (assignedToDiff ?? {})) {
+      const raw = (assignedToDiff as { newValue?: unknown }).newValue;
+      metaUpdates.adoAssignedTo = typeof raw === 'string'
+        ? (raw || null)
+        : (raw as { displayName?: string } | null)?.displayName ?? null;
+    }
+
+    // 3. Priority change
+    const priorityDiff = fields['Microsoft.VSTS.Common.Priority'];
+    if (priorityDiff !== undefined && 'newValue' in (priorityDiff ?? {})) {
+      const adoInt = Number((priorityDiff as { newValue?: unknown }).newValue);
+      if (!isNaN(adoInt) && adoInt > 0) {
+        metaUpdates.priority = PRIORITY_REVERSE_MAP[adoInt] ?? 'Medium';
+      }
+    }
+
+    // 4. Due date change
+    const targetDateDiff = fields['Microsoft.VSTS.Scheduling.TargetDate'];
+    if (targetDateDiff !== undefined && 'newValue' in (targetDateDiff ?? {})) {
+      const newVal = (targetDateDiff as { newValue?: string | null }).newValue;
+      metaUpdates.dueDate = newVal ? new Date(newVal) : null;
+    }
+
+    // 5. Title change — strip the [REF] prefix that the portal added
+    const titleDiff = fields['System.Title'];
+    if (titleDiff !== undefined && 'newValue' in (titleDiff ?? {})) {
+      const newVal = (titleDiff as { newValue?: string }).newValue;
+      if (newVal) {
+        metaUpdates.title = newVal.replace(/^\[[\w-]+\]\s*/, '').trim();
+      }
+    }
+
+    // Apply accumulated meta updates
+    if (Object.keys(metaUpdates).length > 0) {
+      await this.deps.requests.updateAdoMeta(wiStr, metaUpdates);
+    }
+
+    // If nothing actionable changed, report no-change
+    if (!statusApplied && Object.keys(metaUpdates).length === 0) {
+      return { status: 'ignored:no-change' };
+    }
+
+    return { status: 'applied', mappedTo: statusApplied };
   }
 
   async handleAdoWorkItemCommented(payload: AzureDevOpsWorkItemCommentedPayload): Promise<AdoCommentedEventResult> {
     const wiId = payload.resource.workItemId ?? payload.resource.id;
     if (wiId == null) return { status: 'ignored:missing-workitem-id' };
 
-    // ADO surfaces the comment text in System.History. Different ADO versions/connectors
-    // send either a raw string or a {newValue} diff envelope — accept both shapes.
-    const historyField = payload.resource.fields?.['System.History'];
-    const body = typeof historyField === 'string'
-      ? historyField
-      : (historyField as { newValue?: string } | undefined)?.newValue;
+    // Extract comment text — newer API: resource.comment.text; older: System.History field
+    const body =
+      payload.resource.comment?.text
+      ?? (typeof payload.resource.fields?.['System.History'] === 'string'
+        ? payload.resource.fields['System.History']
+        : (payload.resource.fields?.['System.History'] as { newValue?: string } | undefined)?.newValue
+      )
+      ?? '';
 
     if (!body) return { status: 'ignored:no-comment' };
 
-    const author = payload.resource.revisedBy?.displayName
+    const author = payload.resource.comment?.createdBy?.displayName
+      ?? payload.resource.revisedBy?.displayName
       ?? payload.resource.revisedBy?.uniqueName
       ?? 'Azure DevOps';
 
-    const comment = await this.deps.comments.appendExternalComment(String(wiId), body, author);
+    // ADO comment ID — newer API uses resource.comment.id; older uses resource.id
+    const adoCommentId = payload.resource.comment?.id != null
+      ? String(payload.resource.comment.id)
+      : payload.resource.id != null
+        ? String(payload.resource.id)
+        : null;
+
+    // appendExternalComment deduplicates by adoCommentId internally
+    const comment = await this.deps.comments.appendExternalComment(
+      String(wiId), body, author, adoCommentId,
+    );
     return { status: comment ? 'applied' : 'ignored:unknown-workitem' };
   }
 }

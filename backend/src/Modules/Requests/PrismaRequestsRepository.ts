@@ -123,7 +123,12 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     });
   }
 
-  async updateAdoMeta(id: string, meta: { adoAssignedTo?: string | null }): Promise<void> {
+  async updateAdoMeta(id: string, meta: {
+    adoAssignedTo?: string | null;
+    priority?: string;
+    dueDate?: Date | null;
+    title?: string;
+  }): Promise<void> {
     await this.prisma.request.update({ where: { id }, data: meta });
   }
 

@@ -8,6 +8,13 @@ export interface CreateTicketCmd {
   requesterEmail: string;
   /** ADO project GUID or name to target; overrides adapter default when provided. */
   targetProjectId?: string;
+  /** Pre-resolved native field name → value pairs (e.g. ADO reference names). Applied verbatim as patch ops. */
+  nativeFields?: Record<string, unknown>;
+}
+
+export interface AttachmentUploadResult {
+  adoId:  string;
+  adoUrl: string;
 }
 
 export interface TicketRef {
@@ -56,8 +63,24 @@ export interface ITicketSystem {
   create(cmd: CreateTicketCmd): Promise<TicketRef>;
   /** Push a status change to the external system. */
   updateStatus(externalId: string, status: string, targetProjectId?: string): Promise<void>;
-  /** Append a comment to an existing work item. */
-  addComment(externalId: string, body: string, targetProjectId?: string): Promise<void>;
+  /** Append a comment to an existing work item. Returns the external comment ID, or null for non-ADO adapters. */
+  addComment(externalId: string, body: string, targetProjectId?: string): Promise<{ id: string } | null>;
+
+  /** Upload a file to the external system's attachment store. Returns null for non-ADO adapters. */
+  uploadAttachment(
+    fileName:        string,
+    data:            Buffer,
+    contentType:     string,
+    targetProjectId?: string,
+  ): Promise<AttachmentUploadResult | null>;
+
+  /** Link an already-uploaded attachment to a work item. No-op for non-ADO adapters. */
+  linkAttachmentToWorkItem(
+    externalId:       string,
+    adoAttachmentUrl: string,
+    fileName:         string,
+    targetProjectId?: string,
+  ): Promise<void>;
 
   /** List all projects/repositories available in the external system. */
   listExternalProjects(): Promise<ExternalProject[]>;

@@ -6,6 +6,7 @@ export interface IAttachmentsRepository {
   findById(id: string, clientId: string): Promise<Attachment | null>;
   listByRequest(requestId: string, clientId: string): Promise<Attachment[]>;
   remove(id: string, clientId: string): Promise<boolean>;
+  setAdoRef(id: string, adoId: string, adoUrl: string): Promise<void>;
 }
 
 // ── InMemory implementation ─────────────────────────────────────────────────
@@ -13,7 +14,12 @@ export class InMemoryAttachmentsRepository implements IAttachmentsRepository {
   private readonly store = new Map<string, Attachment>();
 
   async add(att: Attachment): Promise<Attachment> {
-    this.store.set(att.id, { ...att, commentId: att.commentId ?? null });
+    this.store.set(att.id, {
+      ...att,
+      commentId:        att.commentId ?? null,
+      adoAttachmentId:  att.adoAttachmentId ?? null,
+      adoAttachmentUrl: att.adoAttachmentUrl ?? null,
+    });
     return this.store.get(att.id)!;
   }
 
@@ -34,6 +40,14 @@ export class InMemoryAttachmentsRepository implements IAttachmentsRepository {
     this.store.delete(id);
     return true;
   }
+
+  async setAdoRef(id: string, adoId: string, adoUrl: string): Promise<void> {
+    const a = this.store.get(id);
+    if (a) {
+      a.adoAttachmentId  = adoId;
+      a.adoAttachmentUrl = adoUrl;
+    }
+  }
 }
 
 // ── Prisma implementation ──────────────────────────────────────────────────
@@ -43,16 +57,18 @@ export class PrismaAttachmentsRepository implements IAttachmentsRepository {
   async add(att: Attachment): Promise<Attachment> {
     const row = await this.prisma.attachment.create({
       data: {
-        id:          att.id,
-        requestId:   att.requestId,
-        clientId:    att.clientId,
-        commentId:   att.commentId ?? null,
-        fileName:    att.fileName,
-        contentType: att.contentType,
-        size:        att.size,
-        storageKey:  att.storageKey,
-        uploadedBy:  att.uploadedBy,
-        uploadedAt:  att.uploadedAt,
+        id:               att.id,
+        requestId:        att.requestId,
+        clientId:         att.clientId,
+        commentId:        att.commentId ?? null,
+        fileName:         att.fileName,
+        contentType:      att.contentType,
+        size:             att.size,
+        storageKey:       att.storageKey,
+        uploadedBy:       att.uploadedBy,
+        uploadedAt:       att.uploadedAt,
+        adoAttachmentId:  att.adoAttachmentId ?? null,
+        adoAttachmentUrl: att.adoAttachmentUrl ?? null,
       },
     });
     return this.toDomain(row);
@@ -76,20 +92,30 @@ export class PrismaAttachmentsRepository implements IAttachmentsRepository {
     return result.count > 0;
   }
 
+  async setAdoRef(id: string, adoId: string, adoUrl: string): Promise<void> {
+    await this.prisma.attachment.update({
+      where: { id },
+      data:  { adoAttachmentId: adoId, adoAttachmentUrl: adoUrl },
+    });
+  }
+
   private toDomain = (r: {
     id: string; requestId: string; clientId: string; commentId: string | null;
     fileName: string; contentType: string; size: number; storageKey: string;
-    uploadedBy: string; uploadedAt: Date;
+    uploadedBy: string; adoAttachmentId?: string | null; adoAttachmentUrl?: string | null;
+    uploadedAt: Date;
   }): Attachment => ({
-    id:          r.id,
-    requestId:   r.requestId,
-    clientId:    r.clientId,
-    commentId:   r.commentId,
-    fileName:    r.fileName,
-    contentType: r.contentType,
-    size:        r.size,
-    storageKey:  r.storageKey,
-    uploadedBy:  r.uploadedBy,
-    uploadedAt:  r.uploadedAt,
+    id:               r.id,
+    requestId:        r.requestId,
+    clientId:         r.clientId,
+    commentId:        r.commentId,
+    fileName:         r.fileName,
+    contentType:      r.contentType,
+    size:             r.size,
+    storageKey:       r.storageKey,
+    uploadedBy:       r.uploadedBy,
+    adoAttachmentId:  r.adoAttachmentId ?? null,
+    adoAttachmentUrl: r.adoAttachmentUrl ?? null,
+    uploadedAt:       r.uploadedAt,
   });
 }

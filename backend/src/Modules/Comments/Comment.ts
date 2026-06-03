@@ -6,6 +6,7 @@ export interface Comment {
   authorUserId: string | null;    // FK to portal_users; null for TICKET-sourced comments
   visibility:   'public' | 'internal';
   source:       'PORTAL' | 'TICKET';
+  adoCommentId: string | null;    // ADO comment ID stored to prevent webhook echo duplicates
   createdAt:    Date;
 }
 

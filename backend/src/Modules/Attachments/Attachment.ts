@@ -1,14 +1,16 @@
 export interface Attachment {
-  id:          string;
-  requestId:   string;
-  clientId:    string;
-  commentId:   string | null;   // set when the attachment is scoped to a comment (nullable)
-  fileName:    string;
-  contentType: string;
-  size:        number;          // bytes
-  storageKey:  string;          // key in IFileStorage
-  uploadedBy:  string;          // email
-  uploadedAt:  Date;
+  id:               string;
+  requestId:        string;
+  clientId:         string;
+  commentId:        string | null;   // set when the attachment is scoped to a comment (nullable)
+  fileName:         string;
+  contentType:      string;
+  size:             number;          // bytes
+  storageKey:       string;          // key in IFileStorage
+  uploadedBy:       string;          // email
+  adoAttachmentId:  string | null;   // ADO attachment GUID; null until synced to ADO
+  adoAttachmentUrl: string | null;   // ADO attachment download URL; null until synced
+  uploadedAt:       Date;
 }
 
 export interface UploadAttachmentCmd {

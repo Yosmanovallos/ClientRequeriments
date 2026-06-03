@@ -1,4 +1,3 @@
-import TurndownService              from 'turndown';
 import type { Comment, AddCommentCmd } from './Comment.js';
 import type { ICommentsRepository }    from './CommentsRepository.js';
 import type { IRequestsRepository }    from '../Requests/RequestsRepository.js';
@@ -7,8 +6,6 @@ import type { ISanitizer }             from '../../Platform/Ports/ISanitizer.js'
 import type { IFileStorage }           from '../../Platform/Ports/IFileStorage.js';
 import type { INotifier }              from '../../Platform/Ports/INotifier.js';
 import { Errors }                      from '../../Shared/errors.js';
-
-const turndown = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-' });
 
 const PROXY_URL_RE = /src="\/api\/comment-files\/([^"]+)"/g;
 
@@ -42,26 +39,23 @@ export class CommentsService {
       authorUserId: cmd.authorUserId,
       visibility:   'public',
       source:       'PORTAL',
+      adoCommentId: null,
       createdAt:    new Date(),
     };
     const saved = await this.deps.comments.add(comment);
 
-    // Mirror to ticket system as Markdown — non-fatal
+    // Mirror to ADO as HTML — non-fatal; save returned comment ID for dedup
     if (req.adoWorkItemId) {
-      const markdown = this.toMarkdown(sanitizedBody, cmd.author);
-      this.deps.tickets.addComment(req.adoWorkItemId, markdown, req.adoProjectName ?? undefined)
+      const htmlBody = this.toHtml(sanitizedBody, cmd.author);
+      this.deps.tickets
+        .addComment(req.adoWorkItemId, htmlBody, req.adoProjectName ?? undefined)
+        .then(async (result) => {
+          if (result?.id) {
+            await this.deps.comments.setAdoCommentId(saved.id, result.id);
+          }
+        })
         .catch(err => console.error('[CommentsService] ticket comment sync failed:', err));
     }
-
-    // Phase 9: notify org members when a CLIENT posts a comment
-    // if (req.organizationId) {
-    //   const emails = await getOrgMemberEmails(req.organizationId, this.deps.orgRepo, this.deps.userRepo);
-    //   this.deps.notifier.sendEmail({
-    //     to:       emails,
-    //     subject:  `New comment on request ${req.reference}`,
-    //     htmlBody: `<p><strong>${cmd.author}</strong> added a comment:</p>${sanitizedBody}`,
-    //   }).catch(err => console.error('[CommentsService] org notification failed:', err));
-    // }
 
     // Hydrate images so the POST response has signed URLs (same as list())
     return this.hydrateImages(saved, cmd.clientId);
@@ -76,16 +70,25 @@ export class CommentsService {
   }
 
   /**
-   * Append a comment sourced from an external system (e.g. GitHub issue comment webhook).
-   * Does NOT mirror back (would cause an infinite loop). Returns null if no request matches.
+   * Append a comment sourced from an external system (e.g. ADO webhook).
+   * Does NOT mirror back (would cause an infinite loop).
+   * Returns null only if no matching request is found.
+   * When adoCommentId is provided, deduplicates: returns the existing comment if already stored.
    */
   async appendExternalComment(
-    externalId: string,
-    body: string,
-    author: string,
+    externalId:   string,
+    body:         string,
+    author:       string,
+    adoCommentId?: string | null,
   ): Promise<Comment | null> {
     const req = await this.deps.requests.findByExternalRef(externalId);
     if (!req) return null;
+
+    // Dedup: if this ADO comment ID is already stored for this request, skip insert
+    if (adoCommentId) {
+      const existing = await this.deps.comments.findByAdoCommentId(adoCommentId, req.id);
+      if (existing) return existing;
+    }
 
     return this.deps.comments.add({
       id:           crypto.randomUUID(),
@@ -95,18 +98,16 @@ export class CommentsService {
       authorUserId: null,
       visibility:   'public',
       source:       'TICKET',
+      adoCommentId: adoCommentId ?? null,
       createdAt:    new Date(),
     });
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  private toMarkdown(html: string, author: string): string {
-    // Replace inline images with a placeholder before converting — GitHub Issues
-    // doesn't support programmatic attachment uploads via API.
-    const withoutImages = html.replace(/<img[^>]*>/gi, '[image attached in portal]');
-    const md = turndown.turndown(withoutImages);
-    return `**${author}:** ${md}`;
+  /** Format a portal comment as HTML for ADO Discussion. ADO renders HTML natively. */
+  private toHtml(sanitizedHtml: string, author: string): string {
+    return `<div><strong>${escapeHtml(author)}</strong> <span style="color:#888">&middot; via Provana Portal</span><br/>${sanitizedHtml}</div>`;
   }
 
   private async hydrateImages(c: Comment, clientId: string): Promise<Comment> {
@@ -146,4 +147,12 @@ export class CommentsService {
     });
     return { ...c, body };
   }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
