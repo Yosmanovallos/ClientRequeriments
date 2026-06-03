@@ -114,9 +114,10 @@ async function main() {
     }),
   });
 
-  // CORS
+  // CORS — CORS_ORIGIN=* allows any origin (dev/staging); set to exact domain in production
+  const corsOrigin = process.env['CORS_ORIGIN'] || 'http://localhost:5173';
   await app.register(cors, {
-    origin: process.env['CORS_ORIGIN'] || 'http://localhost:5173',
+    origin: corsOrigin === '*' ? true : corsOrigin,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
