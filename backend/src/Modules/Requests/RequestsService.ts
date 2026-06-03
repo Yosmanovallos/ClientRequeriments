@@ -94,6 +94,13 @@ export class RequestsService {
     return true;
   }
 
+  /** Patch ADO-synced metadata (assigned-to, etc.) when a webhook reports a change. */
+  async updateAdoMeta(externalId: string, meta: { adoAssignedTo?: string | null }): Promise<void> {
+    const req = await this.deps.repo.findByExternalRef(externalId);
+    if (!req) return;
+    await this.deps.repo.updateAdoMeta(req.id, meta);
+  }
+
   // ── private helpers ──────────────────────────────────────────────────────
 
   /**
@@ -143,6 +150,7 @@ export class RequestsService {
       requestReference: req.reference,
       requestType:      req.requestType,
       requesterEmail,
+      targetProjectId:  req.adoProjectName ?? undefined,
     });
     await this.deps.repo.saveExternalRef(req.id, ref.externalId, ref.externalUrl);
 

@@ -19,6 +19,8 @@ export interface IRequestsRepository {
   list(clientId: string, filters?: ListRequestsFilters): Promise<Request[]>;
   updateStatus(id: string, toStatus: string, fromStatus: string, source: string, actor: string | null): Promise<void>;
   saveExternalRef(id: string, externalId: string, externalUrl: string): Promise<void>;
+  /** Patch ADO-synced metadata (assigned-to, etc.) without touching status or other fields. */
+  updateAdoMeta(id: string, meta: { adoAssignedTo?: string | null }): Promise<void>;
   getHistory(requestId: string): Promise<StatusHistoryEntry[]>;
   nextReference(clientId: string, prefix: string): Promise<string>;
 }
@@ -40,20 +42,22 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
       projectId:        cmd.projectId,
       organizationId:   cmd.organizationId,
       organizationName: null,
-      templateId:     cmd.templateId ?? null,
-      reference:      cmd.reference,
-      requestType:    cmd.requestType,
-      title:          cmd.title,
-      status:         'NEW',
-      priority:       cmd.priority,
-      dueDate:        cmd.dueDate,
-      payload:        JSON.stringify(cmd.payload),
-      idempotencyKey: cmd.idempotencyKey,
-      createdBy:      cmd.createdBy,
-      adoWorkItemId:  null,
-      adoWorkItemUrl: null,
-      createdAt:      now,
-      updatedAt:      now,
+      templateId:      cmd.templateId ?? null,
+      reference:       cmd.reference,
+      requestType:     cmd.requestType,
+      title:           cmd.title,
+      status:          'NEW',
+      priority:        cmd.priority,
+      dueDate:         cmd.dueDate,
+      payload:         JSON.stringify(cmd.payload),
+      idempotencyKey:  cmd.idempotencyKey,
+      createdBy:       cmd.createdBy,
+      adoWorkItemId:   null,
+      adoWorkItemUrl:  null,
+      adoProjectName:  cmd.adoProjectName ?? null,
+      adoAssignedTo:   null,
+      createdAt:       now,
+      updatedAt:       now,
     };
     this.requests.set(cmd.id, req);
     await this.recordHistory(cmd.id, null, 'NEW', 'portal', cmd.createdBy);
@@ -110,6 +114,13 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
   async saveExternalRef(id: string, externalId: string, externalUrl: string): Promise<void> {
     const r = this.requests.get(id);
     if (r) { r.adoWorkItemId = externalId; r.adoWorkItemUrl = externalUrl; }
+  }
+
+  async updateAdoMeta(id: string, meta: { adoAssignedTo?: string | null }): Promise<void> {
+    const r = this.requests.get(id);
+    if (!r) return;
+    if (meta.adoAssignedTo !== undefined) r.adoAssignedTo = meta.adoAssignedTo;
+    r.updatedAt = new Date();
   }
 
   async getHistory(requestId: string): Promise<StatusHistoryEntry[]> {

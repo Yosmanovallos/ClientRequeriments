@@ -187,7 +187,10 @@ export default function ViewRequestDetail({ requestId }: Props) {
           <div className="detail-meta">
             <span className={`badge badge-${color}`}>{req.status}</span>
             <span>Submitted {fmtDate(req.createdAt)}</span>
-            {req.adoWorkItemId && <span>· Ticket #{req.adoWorkItemId}</span>}
+            {req.adoWorkItemId && req.adoWorkItemUrl
+              ? <a href={req.adoWorkItemUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>· ADO #{req.adoWorkItemId} ↗</a>
+              : req.adoWorkItemId && <span>· ADO #{req.adoWorkItemId}</span>
+            }
           </div>
         </div>
 
@@ -414,6 +417,14 @@ export default function ViewRequestDetail({ requestId }: Props) {
                   {req.status}
                 </span>
               </div>
+
+              {/* ADO Assigned to */}
+              {req.adoAssignedTo && (
+                <div className="aside-section">
+                  <div className="aside-label">Assigned to</div>
+                  <div className="aside-value">{req.adoAssignedTo}</div>
+                </div>
+              )}
 
               {/* Notifications */}
               <div className="aside-section">

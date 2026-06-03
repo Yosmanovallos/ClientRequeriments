@@ -31,6 +31,7 @@ A multi-tenant customer request portal where clients submit and track Power BI a
 - **Agents** and **Admins** see all requests for their assigned project, update statuses, and leave comments.
 - **Super Admins** manage tenants (clients), users, projects, form templates, and can see everything across all tenants.
 - Every status change can sync to a ticket system (GitHub Issues → Azure DevOps) and send a notification (SMTP email → Teams / Outlook).
+- **Projects are Azure DevOps-driven** — admins connect existing ADO projects to the portal via a selector; freeform project creation is not allowed. If there are no unconnected ADO projects, the "+ New Project" button explains why instead of showing a form.
 
 ---
 
@@ -230,14 +231,16 @@ All configuration is via environment variables. Set them in `backend/.env` for l
 
 ### Azure DevOps (`TICKETS_PROVIDER=azuredevops`)
 
-| Variable | Description |
-|---|---|
-| `ADO_ORG` | Organisation slug from `dev.azure.com/<org>` |
-| `ADO_PROJECT` | Project name (case-sensitive) |
-| `ADO_PAT` | Personal Access Token with Work Items: Read, write & manage |
-| `ADO_WORK_ITEM_TYPE` | `Task` (default) · `User Story` · `Bug` · `Issue` |
-| `ADO_WEBHOOK_USER` | Basic-auth username for inbound ADO Service Hook |
-| `ADO_WEBHOOK_PASS` | Basic-auth password for inbound ADO Service Hook |
+| Variable | Required | Description |
+|---|---|---|
+| `ADO_ORG` | Yes | Organisation slug from `dev.azure.com/<org>` |
+| `ADO_PAT` | Yes | Personal Access Token — scopes: Work Items Read+Write, Project and Team Read |
+| `ADO_PROJECT` | No | Fallback project name when the request has no mapped ADO project |
+| `ADO_WORK_ITEM_TYPE` | No | Work item type to create — `Task` (default) · `User Story` · `Bug` · `Issue` |
+| `ADO_STATE_MAP_JSON` | No | JSON override for the portal-status → ADO-state map (default targets Agile template) |
+| `ADO_API_URL` | No | Override for Azure DevOps Server (on-prem). Defaults to `https://dev.azure.com` |
+| `ADO_WEBHOOK_USER` | No | Basic-auth username for inbound ADO Service Hook |
+| `ADO_WEBHOOK_PASS` | No | Basic-auth password for inbound ADO Service Hook |
 
 ### SMTP Notifications (`NOTIFY_PROVIDER=smtp` or `composite`)
 
@@ -396,15 +399,44 @@ For bidirectional sync (status changes flow back from GitHub to the portal), als
 
 ### Azure DevOps
 
+The portal treats Azure DevOps as the source of truth for **projects and work items**. Admins connect existing ADO projects to the portal — the app never creates ADO projects.
+
+#### Minimum setup
+
 ```env
 TICKETS_PROVIDER=azuredevops
-ADO_ORG=your-org-name
-ADO_PROJECT=Your-Project
-ADO_PAT=<PAT with Work Items: Read/write/manage>
-ADO_WORK_ITEM_TYPE=Task
+ADO_ORG=your-org-slug          # the slug from dev.azure.com/<slug>
+ADO_PAT=<PAT>                  # generate at dev.azure.com/<org>/_usersSettings/tokens
+ADO_WORK_ITEM_TYPE=Issue       # matches the work item type in your ADO process template
+                               # Agile → Task | User Story  /  Scrum → Product Backlog Item  /  Basic → Issue
 ```
 
-For bidirectional sync via ADO Service Hooks:
+**`ADO_PROJECT` is optional.** When omitted, every request targets the ADO project stored in the portal's database (set when an admin connects the project). You only need to set it if you have a single fixed fallback project.
+
+#### Process template — state map override
+
+The default state map targets the **Agile** template (`New → Active → Resolved → Closed`). If your ADO project uses the **Basic** template (`To Do → Doing → Done`), set:
+
+```env
+ADO_STATE_MAP_JSON={"NEW":{"state":"To Do"},"IN REVIEW":{"state":"To Do"},"APPROVED":{"state":"To Do"},"IN DEVELOPMENT":{"state":"Doing"},"UAT":{"state":"Doing"},"CUSTOMER FEEDBACK":{"state":"Doing"},"DONE":{"state":"Done"},"CANCELLED":{"state":"Done"},"ON HOLD":{"state":"To Do"}}
+```
+
+#### Connecting ADO projects in the portal
+
+1. In the Control Panel → **Projects**, click **+ New Project**
+2. The modal fetches all ADO projects in `ADO_ORG` that are not yet connected
+3. Select one — the portal name and slug auto-fill from the ADO project name
+4. Click **Connect project** — a local mapping row is created; nothing is created in ADO
+5. Once all ADO projects are connected the modal shows an informational message instead of a form
+
+#### Generating a PAT
+
+Go to `https://dev.azure.com/<your-org>/_usersSettings/tokens` → **+ New Token** → set these scopes:
+- Work Items → **Read & Write**
+- Project and Team → **Read**
+
+#### Bidirectional sync via ADO Service Hooks
+
 ```env
 ADO_WEBHOOK_USER=<username>
 ADO_WEBHOOK_PASS=<password>
@@ -583,10 +615,12 @@ When running with `AUTH_PROVIDER=local` (the default), these seeded accounts are
 | Email | Password | Role |
 |---|---|---|
 | `super@provana.com` | `Demo1234!` | SUPER_ADMIN |
-| `admin@blg.com` | `Demo1234!` | ADMIN — BLG tenant |
-| `agent@blg.com` | `Demo1234!` | AGENT — BLG Power BI project |
-| `client@blg.com` | `Demo1234!` | CLIENT — BLG Power BI project |
+| `admin@blg.com` | `Demo1234!` | ADMIN |
+| `agent@blg.com` | `Demo1234!` | AGENT |
+| `client@blg.com` | `Demo1234!` | CLIENT |
 | `pending@blg.com` | `Demo1234!` | PENDING — awaiting approval |
+
+> **No projects are seeded.** Connect an Azure DevOps project first via Control Panel → Projects → + New Project. Assign users to projects afterwards via Control Panel → Projects → Members.
 
 ---
 

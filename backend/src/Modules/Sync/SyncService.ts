@@ -132,6 +132,16 @@ export class SyncService {
       String(wiId), target, 'azuredevops', actor,
     );
     if (!applied) return { status: 'ignored:unknown-workitem' };
+
+    // Also sync AssignedTo when it changed in this revision
+    const assignedToDiff = payload.resource.fields['System.AssignedTo'];
+    if (assignedToDiff?.newValue !== undefined) {
+      const assignedTo = typeof assignedToDiff.newValue === 'string'
+        ? assignedToDiff.newValue || null
+        : (assignedToDiff.newValue as { displayName?: string } | null)?.displayName ?? null;
+      await this.deps.requests.updateAdoMeta(String(wiId), { adoAssignedTo: assignedTo });
+    }
+
     return { status: 'applied', mappedTo: target };
   }
 

@@ -114,13 +114,13 @@ function buildTickets(env: NodeJS.ProcessEnv): ITicketSystem {
     }
     case 'azuredevops': {
       const org     = env['ADO_ORG'];
-      const project = env['ADO_PROJECT'];
       const pat     = env['ADO_PAT'];
-      if (!org || !project || !pat) {
-        throw new Error('TICKETS_PROVIDER=azuredevops requires ADO_ORG, ADO_PROJECT, ADO_PAT');
+      if (!org || !pat) {
+        throw new Error('TICKETS_PROVIDER=azuredevops requires ADO_ORG and ADO_PAT');
       }
 
-      // Optional overrides
+      // ADO_PROJECT is optional — when omitted, project comes from the DB-mapped adoProjectId per request.
+      const project      = env['ADO_PROJECT'];
       const workItemType = env['ADO_WORK_ITEM_TYPE'];   // defaults to "Task" inside the adapter
       const apiUrl       = env['ADO_API_URL'];          // defaults to https://dev.azure.com (override for ADO Server on-prem)
 

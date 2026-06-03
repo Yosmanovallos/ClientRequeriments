@@ -49,7 +49,7 @@ export class CommentsService {
     // Mirror to ticket system as Markdown — non-fatal
     if (req.adoWorkItemId) {
       const markdown = this.toMarkdown(sanitizedBody, cmd.author);
-      this.deps.tickets.addComment(req.adoWorkItemId, markdown)
+      this.deps.tickets.addComment(req.adoWorkItemId, markdown, req.adoProjectName ?? undefined)
         .catch(err => console.error('[CommentsService] ticket comment sync failed:', err));
     }
 

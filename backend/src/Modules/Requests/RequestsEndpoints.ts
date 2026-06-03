@@ -3,6 +3,7 @@ import type { Container }       from '../../Platform/AdapterRegistration.js';
 import type { IRequestsRepository, ListRequestsFilters } from './RequestsRepository.js';
 import type { IOrganizationRepository } from '../Organizations/OrganizationRepository.js';
 import type { IFormTemplateRepository } from '../FormTemplates/FormTemplateRepository.js';
+import type { IProjectRepository } from '../IAM/ProjectRepository.js';
 import { RequestsService }      from './RequestsService.js';
 import { CreateRequestSchema, ListRequestsSchema } from './RequestsValidators.js';
 import { requirePermission, requireProjectAccess } from '../IAM/PermissionGuard.js';
@@ -26,6 +27,7 @@ export function registerRequestsEndpoints(
   repo: IRequestsRepository,
   orgRepo?: IOrganizationRepository,
   templateRepo?: IFormTemplateRepository,
+  projectRepo?: IProjectRepository,
 ): void {
   const svc = new RequestsService({
     repo,
@@ -65,18 +67,26 @@ export function registerRequestsEndpoints(
       }
     }
 
+    // Resolve adoProjectName from the project so ticket creation targets the correct ADO project.
+    let adoProjectName: string | null = null;
+    if (input.projectId && projectRepo) {
+      const proj = await projectRepo.findById(input.projectId);
+      adoProjectName = proj?.adoProjectName ?? null;
+    }
+
     const result = await svc.create({
-      clientId:       req.user.clientId,
-      projectId:      input.projectId ?? null,
-      organizationId: input.organizationId ?? null,
-      templateId:     input.templateId ?? null,
-      requestType:    input.requestType,
-      title:          input.title,
-      priority:       input.priority,
-      dueDate:        input.dueDate ? new Date(input.dueDate) : null,
-      payload:        input.payload,
-      idempotencyKey: input.idempotencyKey ?? null,
-      createdBy:      req.user.email,
+      clientId:        req.user.clientId,
+      projectId:       input.projectId ?? null,
+      organizationId:  input.organizationId ?? null,
+      templateId:      input.templateId ?? null,
+      requestType:     input.requestType,
+      title:           input.title,
+      priority:        input.priority,
+      dueDate:         input.dueDate ? new Date(input.dueDate) : null,
+      payload:         input.payload,
+      idempotencyKey:  input.idempotencyKey ?? null,
+      createdBy:       req.user.email,
+      adoProjectName,
     });
 
     return reply.status(201).send(result);

@@ -1,34 +1,78 @@
 import type { Project, ProjectMember, ProjectSummary, UpdateProjectPatch } from './ProjectEntity.js';
 import type { IProjectRepository } from './ProjectRepository.js';
+import type { ITicketSystem, ExternalProject } from '../../Platform/Ports/ITicketSystem.js';
 import { Errors } from '../../Shared/errors.js';
 
 interface Deps {
   projects: IProjectRepository;
+  tickets:  ITicketSystem;
 }
 
 const SLUG_RX = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+
+function autoSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 64) || 'project';
+}
 
 export class ProjectService {
   constructor(private readonly deps: Deps) {}
 
   /**
-   * Create a new project under a client. Slug must be URL-safe and unique within the client.
-   * SuperAdmin can pass any clientId; Admin's clientId is forced server-side by the endpoint.
+   * Create a new project under a client.
+   * When adoProjectId is provided, the project is linked to an ADO project (mapping mode).
+   * When omitted, a standalone local project is created (non-ADO deployments / legacy path).
    */
-  async create(input: { clientId: string; name: string; slug: string; description?: string | null; iconUrl?: string | null }): Promise<Project> {
-    if (!input.name.trim())            throw Errors.badRequest('Project name is required');
-    if (!SLUG_RX.test(input.slug))     throw Errors.badRequest('Project slug must be lowercase letters, digits, and hyphens (max 64 chars)');
+  async create(input: {
+    clientId:        string;
+    name:            string;
+    slug?:           string;
+    description?:    string | null;
+    iconUrl?:        string | null;
+    adoProjectId?:   string | null;
+    adoProjectName?: string | null;
+  }): Promise<Project> {
+    if (!input.name.trim()) throw Errors.badRequest('Project name is required');
 
-    const dup = await this.deps.projects.findBySlug(input.clientId, input.slug);
-    if (dup) throw Errors.conflict(`A project with slug "${input.slug}" already exists in this client`);
+    // Derive slug from name when not provided (common when creating from ADO selector)
+    const slug = input.slug?.trim() || autoSlug(input.name);
+    if (!SLUG_RX.test(slug)) throw Errors.badRequest('Project slug must be lowercase letters, digits, and hyphens (max 64 chars)');
+
+    // Prevent duplicate slug within the client
+    const dupSlug = await this.deps.projects.findBySlug(input.clientId, slug);
+    if (dupSlug) throw Errors.conflict(`A project with slug "${slug}" already exists in this client`);
+
+    // Prevent duplicate ADO project mapping within the client
+    if (input.adoProjectId) {
+      const dupAdo = await this.deps.projects.findByAdoProjectId(input.clientId, input.adoProjectId);
+      if (dupAdo) throw Errors.conflict(`ADO project "${input.adoProjectId}" is already mapped to a portal project in this client`);
+    }
 
     return this.deps.projects.create({
-      clientId:    input.clientId,
-      name:        input.name.trim(),
-      slug:        input.slug,
-      description: input.description ?? null,
-      iconUrl:     input.iconUrl ?? null,
+      clientId:       input.clientId,
+      name:           input.name.trim(),
+      slug,
+      description:    input.description ?? null,
+      iconUrl:        input.iconUrl ?? null,
+      adoProjectId:   input.adoProjectId ?? null,
+      adoProjectName: input.adoProjectName ?? null,
     });
+  }
+
+  /**
+   * Returns ADO projects available for mapping: all external projects minus those
+   * already mapped for this client.
+   */
+  async listAvailableAdoProjects(clientId: string): Promise<ExternalProject[]> {
+    const [external, mapped] = await Promise.all([
+      this.deps.tickets.listExternalProjects(),
+      this.deps.projects.listMappedAdoProjectIds(clientId),
+    ]);
+    const mappedSet = new Set(mapped);
+    return external.filter(p => !mappedSet.has(p.id));
   }
 
   async getById(id: string): Promise<Project> {

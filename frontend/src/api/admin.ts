@@ -11,15 +11,24 @@ export interface PortalUser {
 }
 
 export interface AdminProject {
-  id:           string;
-  name:         string;
-  slug:         string;
-  description:  string | null;
-  iconUrl:      string | null;
-  memberCount:  number;
-  requestCount: number;
-  formCount:    number;
-  isActive:     boolean;
+  id:             string;
+  name:           string;
+  slug:           string;
+  description:    string | null;
+  iconUrl:        string | null;
+  memberCount:    number;
+  requestCount:   number;
+  formCount:      number;
+  isActive:       boolean;
+  adoProjectId:   string | null;
+  adoProjectName: string | null;
+}
+
+export interface AdoProject {
+  id:          string;
+  name:        string;
+  description: string | null;
+  url:         string;
 }
 
 export interface Organization {
@@ -63,13 +72,21 @@ export const usersApi = {
 
 export const projectsApi = {
   list:         () => api.get<{ data: AdminProject[]; count: number }>('/projects'),
-  create:       (data: { name: string; slug: string; description?: string; iconUrl?: string | null }) =>
-    api.post<AdminProject>('/projects', data),
-  update:       (id: string, data: Partial<{ name: string; description: string | null; iconUrl: string | null; isActive: boolean }>) =>
-    api.patch<AdminProject>(`/projects/${id}`, data),
+  create:       (data: {
+    name: string; slug?: string; description?: string | null; iconUrl?: string | null;
+    adoProjectId?: string | null; adoProjectName?: string | null;
+  }) => api.post<AdminProject>('/projects', data),
+  update:       (id: string, data: Partial<{
+    name: string; description: string | null; iconUrl: string | null; isActive: boolean;
+    adoProjectId: string | null; adoProjectName: string | null;
+  }>) => api.patch<AdminProject>(`/projects/${id}`, data),
   members:      (id: string) => api.get<{ data: ProjectMember[]; count: number }>(`/projects/${id}/members`),
   addMember:    (id: string, userId: string) => api.post<void>(`/projects/${id}/members`, { userId }),
   removeMember: (id: string, userId: string) => api.delete<void>(`/projects/${id}/members/${userId}`),
+};
+
+export const adoProjectsApi = {
+  listAvailable: () => api.get<{ data: AdoProject[]; count: number }>('/projects/ado-available'),
 };
 
 export const orgsApi = {

@@ -38,6 +38,7 @@ export class PrismaRequestsRepository implements IRequestsRepository {
           payload:        JSON.stringify(cmd.payload),
           idempotencyKey: cmd.idempotencyKey,
           createdBy:      cmd.createdBy,
+          adoProjectName: cmd.adoProjectName ?? null,
         },
       });
       await tx.statusHistory.create({
@@ -122,6 +123,10 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     });
   }
 
+  async updateAdoMeta(id: string, meta: { adoAssignedTo?: string | null }): Promise<void> {
+    await this.prisma.request.update({ where: { id }, data: meta });
+  }
+
   async getHistory(requestId: string): Promise<StatusHistoryEntry[]> {
     const rows = await this.prisma.statusHistory.findMany({
       where: { requestId },
@@ -161,6 +166,7 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     status: string; priority: string; dueDate: Date | null; payload: string;
     idempotencyKey: string | null; createdBy: string | null;
     adoWorkItemId: string | null; adoWorkItemUrl: string | null;
+    adoProjectName?: string | null; adoAssignedTo?: string | null;
     createdAt: Date; updatedAt: Date;
     organization?: { name: string } | null;
   }): Request => ({
@@ -169,19 +175,21 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     projectId:        r.projectId,
     organizationId:   r.organizationId ?? null,
     organizationName: r.organization?.name ?? null,
-    templateId:     r.templateId ?? null,
-    reference:      r.reference,
-    requestType:    r.requestType as RequestType,
-    title:          r.title,
-    status:         r.status as RequestStatus,
-    priority:       r.priority,
-    dueDate:        r.dueDate,
-    payload:        r.payload,
-    idempotencyKey: r.idempotencyKey,
-    createdBy:      r.createdBy,
-    adoWorkItemId:  r.adoWorkItemId,
-    adoWorkItemUrl: r.adoWorkItemUrl,
-    createdAt:      r.createdAt,
-    updatedAt:      r.updatedAt,
+    templateId:      r.templateId ?? null,
+    reference:       r.reference,
+    requestType:     r.requestType as RequestType,
+    title:           r.title,
+    status:          r.status as RequestStatus,
+    priority:        r.priority,
+    dueDate:         r.dueDate,
+    payload:         r.payload,
+    idempotencyKey:  r.idempotencyKey,
+    createdBy:       r.createdBy,
+    adoWorkItemId:   r.adoWorkItemId,
+    adoWorkItemUrl:  r.adoWorkItemUrl,
+    adoProjectName:  r.adoProjectName ?? null,
+    adoAssignedTo:   r.adoAssignedTo ?? null,
+    createdAt:       r.createdAt,
+    updatedAt:       r.updatedAt,
   });
 }

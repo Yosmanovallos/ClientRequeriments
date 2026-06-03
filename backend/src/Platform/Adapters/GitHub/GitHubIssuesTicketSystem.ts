@@ -1,4 +1,7 @@
-import type { ITicketSystem, CreateTicketCmd, TicketRef } from '../../Ports/ITicketSystem.js';
+import type {
+  ITicketSystem, CreateTicketCmd, TicketRef,
+  ExternalProject, WorkItemFilters, WorkItemSummary, WorkItemDetail, ExternalComment,
+} from '../../Ports/ITicketSystem.js';
 
 /**
  * GitHub Issues adapter for ITicketSystem.
@@ -59,7 +62,7 @@ export class GitHubIssuesTicketSystem implements ITicketSystem {
     return { externalId: String(data.number), externalUrl: data.html_url };
   }
 
-  async updateStatus(externalId: string, status: string): Promise<void> {
+  async updateStatus(externalId: string, status: string, _targetProjectId?: string): Promise<void> {
     const isTerminal = TERMINAL_STATUSES.has(status);
     const body: Record<string, unknown> = {
       state: isTerminal ? 'closed' : 'open',
@@ -71,8 +74,24 @@ export class GitHubIssuesTicketSystem implements ITicketSystem {
     await this.api('PATCH', `/issues/${externalId}`, body);
   }
 
-  async addComment(externalId: string, body: string): Promise<void> {
+  async addComment(externalId: string, body: string, _targetProjectId?: string): Promise<void> {
     await this.api('POST', `/issues/${externalId}/comments`, { body });
+  }
+
+  async listExternalProjects(): Promise<ExternalProject[]> {
+    return [];
+  }
+
+  async listExternalWorkItems(_projectId: string, _filters?: WorkItemFilters): Promise<WorkItemSummary[]> {
+    return [];
+  }
+
+  async getExternalWorkItem(_projectId: string, _workItemId: string): Promise<WorkItemDetail> {
+    throw new Error('getExternalWorkItem is not supported by GitHubIssuesTicketSystem');
+  }
+
+  async listExternalWorkItemComments(_projectId: string, _workItemId: string): Promise<ExternalComment[]> {
+    return [];
   }
 
   // ── private ─────────────────────────────────────────────────────────────

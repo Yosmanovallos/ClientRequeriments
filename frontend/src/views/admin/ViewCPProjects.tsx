@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { projectsApi, type AdminProject } from '../../api/admin';
+import { projectsApi, adoProjectsApi, type AdminProject, type AdoProject } from '../../api/admin';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import type { CPSection } from './ViewControlPanel';
 
@@ -75,19 +75,42 @@ function ImagePicker({
 
 // ── Create modal ──────────────────────────────────────────────────────────────
 function CreateModal({ onSave, onClose }: { onSave: () => void; onClose: () => void }) {
-  const [name,    setName]    = useState('');
-  const [slug,    setSlug]    = useState('');
-  const [desc,    setDesc]    = useState('');
-  const [iconUrl, setIconUrl] = useState<string | null>(null);
-  const [saving,  setSaving]  = useState(false);
-  const [error,   setError]   = useState('');
+  const [adoProjects, setAdoProjects] = useState<AdoProject[] | null>(null);
+  const [adoLoading,  setAdoLoading]  = useState(true);
+  const [adoError,    setAdoError]    = useState('');
+  const [selectedAdo, setSelectedAdo] = useState<AdoProject | null>(null);
+  const [name,        setName]        = useState('');
+  const [slug,        setSlug]        = useState('');
+  const [desc,        setDesc]        = useState('');
+  const [iconUrl,     setIconUrl]     = useState<string | null>(null);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
+
+  useEffect(() => {
+    adoProjectsApi.listAvailable().then(({ data, error: err }) => {
+      setAdoLoading(false);
+      if (err) setAdoError(err.message || 'Failed to load Azure DevOps projects.');
+      else     setAdoProjects(data?.data ?? []);
+    });
+  }, []);
+
+  const selectAdoProject = (p: AdoProject) => {
+    setSelectedAdo(p);
+    setName(p.name);
+    setSlug(autoSlug(p.name));
+    setDesc(p.description ?? '');
+  };
 
   const handleSave = async () => {
-    if (!name.trim() || !slug.trim()) { setError('Name and slug are required.'); return; }
+    if (!selectedAdo || !name.trim()) { setError('Name is required.'); return; }
     setSaving(true); setError('');
     const { error: err } = await projectsApi.create({
-      name: name.trim(), slug: slug.trim(),
-      description: desc.trim() || undefined, iconUrl,
+      name:           name.trim(),
+      slug:           slug.trim() || undefined,
+      description:    desc.trim() || null,
+      iconUrl,
+      adoProjectId:   selectedAdo.id,
+      adoProjectName: selectedAdo.name,
     });
     setSaving(false);
     if (err) { setError(err.message); return; }
@@ -97,35 +120,105 @@ function CreateModal({ onSave, onClose }: { onSave: () => void; onClose: () => v
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-card">
-        <h3 className="modal-title">New Project</h3>
-        <p className="modal-sub">Create a new project for this client.</p>
-        {error && <div className="login-error" style={{ marginBottom: 14 }}>{error}</div>}
+        <h3 className="modal-title">Connect Azure DevOps Project</h3>
 
-        <div className="field" style={{ marginBottom: 14 }}>
-          <label className="field-label">Name <span className="req-star">*</span></label>
-          <input className="txt" value={name}
-            onChange={e => { setName(e.target.value); setSlug(autoSlug(e.target.value)); }} />
-        </div>
-        <div className="field" style={{ marginBottom: 14 }}>
-          <label className="field-label">Slug <span className="req-star">*</span></label>
-          <input className="txt" value={slug} onChange={e => setSlug(e.target.value)} placeholder="lowercase-dashes-only" />
-        </div>
-        <div className="field" style={{ marginBottom: 14 }}>
-          <label className="field-label">Description</label>
-          <textarea className="txt txt-area" value={desc} onChange={e => setDesc(e.target.value)}
-            style={{ width: '100%', minHeight: 80 }} />
-        </div>
-        <div className="field" style={{ marginBottom: 4 }}>
-          <label className="field-label">Project Logo</label>
-          <ImagePicker value={iconUrl} onChange={setIconUrl} />
-        </div>
+        {/* Loading */}
+        {adoLoading && (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <LoadingSpinner />
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>Loading Azure DevOps projects…</p>
+          </div>
+        )}
 
-        <div className="modal-actions">
-          <button className="btn-cancel" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn-send" onClick={handleSave} disabled={saving || !name || !slug}>
-            {saving ? 'Creating…' : 'Create project'}
-          </button>
-        </div>
+        {/* Error fetching ADO projects */}
+        {!adoLoading && adoError && (
+          <>
+            <p style={{ fontSize: 13, color: '#a30000', lineHeight: 1.5 }}>
+              Could not load Azure DevOps projects: {adoError}
+            </p>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={onClose}>Close</button>
+            </div>
+          </>
+        )}
+
+        {/* No projects available */}
+        {!adoLoading && !adoError && adoProjects?.length === 0 && (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
+              No Azure DevOps projects are available to connect. All projects in the organization are already linked, or the organization has no projects yet.
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>
+              To add a project here, first create it in Azure DevOps, then return to this screen.
+            </p>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={onClose}>Close</button>
+            </div>
+          </>
+        )}
+
+        {/* Step 1 — ADO project selector */}
+        {!adoLoading && !adoError && adoProjects && adoProjects.length > 0 && !selectedAdo && (
+          <>
+            <p className="modal-sub">Select an Azure DevOps project to connect to this portal.</p>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="field-label">Azure DevOps Project <span className="req-star">*</span></label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
+                {adoProjects.map(p => (
+                  <button key={p.id} type="button" onClick={() => selectAdoProject(p)}
+                    style={{ textAlign: 'left', padding: '10px 14px', border: '1px solid var(--line-2)', borderRadius: 6, background: '#fafafa', cursor: 'pointer' }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
+                    {p.description && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{p.description}</div>}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={onClose}>Cancel</button>
+            </div>
+          </>
+        )}
+
+        {/* Step 2 — Confirm portal details */}
+        {!adoLoading && !adoError && selectedAdo && (
+          <>
+            <p className="modal-sub">Confirm the portal details for this project.</p>
+            {error && <div className="login-error" style={{ marginBottom: 14 }}>{error}</div>}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 12px', background: '#f0f0ff', borderRadius: 6, border: '1px solid #c0c0e0' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>📁 {selectedAdo.name}</span>
+              <button type="button" onClick={() => { setSelectedAdo(null); setName(''); setSlug(''); setDesc(''); }}
+                style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                Change
+              </button>
+            </div>
+
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="field-label">Name <span className="req-star">*</span></label>
+              <input className="txt" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="field-label">Slug</label>
+              <input className="txt" value={slug} onChange={e => setSlug(e.target.value)} placeholder="auto-generated from name" />
+            </div>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="field-label">Description</label>
+              <textarea className="txt txt-area" value={desc} onChange={e => setDesc(e.target.value)}
+                style={{ width: '100%', minHeight: 80 }} />
+            </div>
+            <div className="field" style={{ marginBottom: 4 }}>
+              <label className="field-label">Project Logo</label>
+              <ImagePicker value={iconUrl} onChange={setIconUrl} />
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={onClose} disabled={saving}>Cancel</button>
+              <button className="btn-send" onClick={handleSave} disabled={saving || !name}>
+                {saving ? 'Connecting…' : 'Connect project'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

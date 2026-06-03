@@ -30,6 +30,8 @@ export interface Request {
   createdBy:       string | null;    // email of submitter; null for legacy requests
   adoWorkItemId:   string | null;
   adoWorkItemUrl:  string | null;
+  adoProjectName:  string | null;  // denormalized from Project.adoProjectName at creation
+  adoAssignedTo:   string | null;  // synced from ADO System.AssignedTo via webhook
   createdAt:       Date;
   updatedAt:       Date;
 }
@@ -45,15 +47,16 @@ export interface StatusHistoryEntry {
 }
 
 export interface CreateRequestCmd {
-  clientId:       string;
-  projectId:      string | null;
-  organizationId: string | null;
-  templateId?:    string | null;    // used for server-side condition validation
-  requestType:    RequestType;
-  title:          string;
-  priority:       string;
-  dueDate:        Date | null;
-  payload:        Record<string, unknown>;
-  idempotencyKey: string | null;
-  createdBy:      string;   // email
+  clientId:        string;
+  projectId:       string | null;
+  organizationId:  string | null;
+  templateId?:     string | null;    // used for server-side condition validation
+  requestType:     RequestType;
+  title:           string;
+  priority:        string;
+  dueDate:         Date | null;
+  payload:         Record<string, unknown>;
+  idempotencyKey:  string | null;
+  createdBy:       string;           // email
+  adoProjectName?: string | null;    // passed from endpoint layer; written to DB and used for targetProjectId
 }

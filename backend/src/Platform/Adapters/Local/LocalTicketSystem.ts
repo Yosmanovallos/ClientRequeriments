@@ -1,4 +1,7 @@
-import type { ITicketSystem, CreateTicketCmd, TicketRef } from '../../Ports/ITicketSystem';
+import type {
+  ITicketSystem, CreateTicketCmd, TicketRef,
+  ExternalProject, WorkItemFilters, WorkItemSummary, WorkItemDetail, ExternalComment,
+} from '../../Ports/ITicketSystem';
 
 interface LocalIssue {
   id: string;
@@ -25,15 +28,31 @@ export class LocalTicketSystem implements ITicketSystem {
     return { externalId: id, externalUrl: `http://localhost:4000/local-issues/${id}` };
   }
 
-  async updateStatus(externalId: string, status: string): Promise<void> {
+  async updateStatus(externalId: string, status: string, _targetProjectId?: string): Promise<void> {
     const issue = this.issues.get(externalId);
     if (issue) issue.status = status;
     console.log(`[LocalTicketSystem] ${externalId} → ${status}`);
   }
 
-  async addComment(externalId: string, body: string): Promise<void> {
+  async addComment(externalId: string, body: string, _targetProjectId?: string): Promise<void> {
     const issue = this.issues.get(externalId);
     if (issue) issue.comments.push(body);
     console.log(`[LocalTicketSystem] Comment on ${externalId}: ${body.slice(0, 60)}`);
+  }
+
+  async listExternalProjects(): Promise<ExternalProject[]> {
+    return [];
+  }
+
+  async listExternalWorkItems(_projectId: string, _filters?: WorkItemFilters): Promise<WorkItemSummary[]> {
+    return [];
+  }
+
+  async getExternalWorkItem(_projectId: string, _workItemId: string): Promise<WorkItemDetail> {
+    throw new Error('getExternalWorkItem is not supported by LocalTicketSystem');
+  }
+
+  async listExternalWorkItemComments(_projectId: string, _workItemId: string): Promise<ExternalComment[]> {
+    return [];
   }
 }

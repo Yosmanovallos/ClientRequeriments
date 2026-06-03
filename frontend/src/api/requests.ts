@@ -1,22 +1,24 @@
 import { api } from './client';
 
 export interface RequestSummary {
-  id:             string;
-  reference:      string;
-  requestType:    string;
-  title:          string;
-  status:         string;
-  priority:       string;
-  dueDate:        string | null;
-  projectId:      string | null;
+  id:               string;
+  reference:        string;
+  requestType:      string;
+  title:            string;
+  status:           string;
+  priority:         string;
+  dueDate:          string | null;
+  projectId:        string | null;
   organizationId:   string | null;
   organizationName: string | null;
   createdBy:        string | null;
-  createdAt:      string;
-  updatedAt:      string;
-  adoWorkItemId:  string | null;
-  adoWorkItemUrl: string | null;
-  payloadData:    Record<string, unknown>;
+  createdAt:        string;
+  updatedAt:        string;
+  adoWorkItemId:    string | null;
+  adoWorkItemUrl:   string | null;
+  adoProjectName:   string | null;
+  adoAssignedTo:    string | null;
+  payloadData:      Record<string, unknown>;
 }
 
 export interface StatusHistoryEntry {

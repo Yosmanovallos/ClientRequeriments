@@ -72,6 +72,10 @@ model Project {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt        @map("updated_at")
 
+  // Azure DevOps mapping — nullable so legacy local projects and non-ADO deployments are unaffected.
+  adoProjectId   String?  @map("ado_project_id")   @db.VarChar(64)   // ADO project GUID
+  adoProjectName String?  @map("ado_project_name") @db.VarChar(256)  // denormalized display name
+
   client        Client              @relation(fields: [clientId], references: [id])
   members       ProjectMember[]
   requests      Request[]
@@ -79,6 +83,7 @@ model Project {
   organizations Organization[]
 
   @@unique([clientId, slug])
+  @@unique([clientId, adoProjectId])
   @@index([clientId])
   @@map("projects")
 }
@@ -158,6 +163,8 @@ model Request {
   createdBy      String?   @map("created_by") @db.VarChar(255)          // email of submitter; null for legacy requests
   adoWorkItemId  String?   @map("ado_work_item_id") @db.VarChar(64)
   adoWorkItemUrl String?   @map("ado_work_item_url")
+  adoProjectName String?   @map("ado_project_name") @db.VarChar(256)  // denormalized from Project.adoProjectName at create time
+  adoAssignedTo  String?   @map("ado_assigned_to")  @db.VarChar(255)  // synced from ADO System.AssignedTo on webhook
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 

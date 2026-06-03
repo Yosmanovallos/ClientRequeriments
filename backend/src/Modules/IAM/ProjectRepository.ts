@@ -5,10 +5,13 @@ export interface IProjectRepository {
   create(cmd: CreateProjectCmd): Promise<Project>;
   findById(id: string): Promise<Project | null>;
   findBySlug(clientId: string, slug: string): Promise<Project | null>;
+  findByAdoProjectId(clientId: string, adoProjectId: string): Promise<Project | null>;
   /** List all projects in a client. SuperAdmin uses `undefined` clientId to see ALL clients' projects. */
   list(clientId?: string): Promise<Project[]>;
   /** List a specific set of project IDs (for Agent/Client filtered views). */
   listByIds(ids: string[]): Promise<Project[]>;
+  /** Returns ADO project GUIDs already mapped for a client — used to filter the selector. */
+  listMappedAdoProjectIds(clientId: string): Promise<string[]>;
   update(id: string, patch: UpdateProjectPatch): Promise<Project>;
   archive(id: string): Promise<void>;
 
@@ -29,15 +32,17 @@ export class InMemoryProjectRepository implements IProjectRepository {
   async create(cmd: CreateProjectCmd): Promise<Project> {
     const now = new Date();
     const p: Project = {
-      id:          crypto.randomUUID(),
-      clientId:    cmd.clientId,
-      name:        cmd.name,
-      slug:        cmd.slug,
-      description: cmd.description ?? null,
-      iconUrl:     cmd.iconUrl ?? null,
-      isActive:    true,
-      createdAt:   now,
-      updatedAt:   now,
+      id:             crypto.randomUUID(),
+      clientId:       cmd.clientId,
+      name:           cmd.name,
+      slug:           cmd.slug,
+      description:    cmd.description ?? null,
+      iconUrl:        cmd.iconUrl ?? null,
+      isActive:       true,
+      adoProjectId:   cmd.adoProjectId ?? null,
+      adoProjectName: cmd.adoProjectName ?? null,
+      createdAt:      now,
+      updatedAt:      now,
     };
     this.projects.set(p.id, p);
     return p;
@@ -54,6 +59,13 @@ export class InMemoryProjectRepository implements IProjectRepository {
     return null;
   }
 
+  async findByAdoProjectId(clientId: string, adoProjectId: string): Promise<Project | null> {
+    for (const p of this.projects.values()) {
+      if (p.clientId === clientId && p.adoProjectId === adoProjectId) return p;
+    }
+    return null;
+  }
+
   async list(clientId?: string): Promise<Project[]> {
     return [...this.projects.values()]
       .filter(p => !clientId || p.clientId === clientId)
@@ -62,6 +74,14 @@ export class InMemoryProjectRepository implements IProjectRepository {
 
   async listByIds(ids: string[]): Promise<Project[]> {
     return ids.map(id => this.projects.get(id)).filter((p): p is Project => p !== undefined);
+  }
+
+  async listMappedAdoProjectIds(clientId: string): Promise<string[]> {
+    const ids: string[] = [];
+    for (const p of this.projects.values()) {
+      if (p.clientId === clientId && p.adoProjectId) ids.push(p.adoProjectId);
+    }
+    return ids;
   }
 
   async update(id: string, patch: UpdateProjectPatch): Promise<Project> {
@@ -119,11 +139,13 @@ export class PrismaProjectRepository implements IProjectRepository {
   async create(cmd: CreateProjectCmd): Promise<Project> {
     const row = await this.prisma.project.create({
       data: {
-        clientId:    cmd.clientId,
-        name:        cmd.name,
-        slug:        cmd.slug,
-        description: cmd.description ?? null,
-        iconUrl:     cmd.iconUrl ?? null,
+        clientId:       cmd.clientId,
+        name:           cmd.name,
+        slug:           cmd.slug,
+        description:    cmd.description ?? null,
+        iconUrl:        cmd.iconUrl ?? null,
+        adoProjectId:   cmd.adoProjectId ?? null,
+        adoProjectName: cmd.adoProjectName ?? null,
       },
     });
     return this.toDomain(row);
@@ -137,6 +159,13 @@ export class PrismaProjectRepository implements IProjectRepository {
   async findBySlug(clientId: string, slug: string): Promise<Project | null> {
     const row = await this.prisma.project.findUnique({
       where: { clientId_slug: { clientId, slug } },
+    });
+    return row ? this.toDomain(row) : null;
+  }
+
+  async findByAdoProjectId(clientId: string, adoProjectId: string): Promise<Project | null> {
+    const row = await this.prisma.project.findUnique({
+      where: { clientId_adoProjectId: { clientId, adoProjectId } },
     });
     return row ? this.toDomain(row) : null;
   }
@@ -156,6 +185,14 @@ export class PrismaProjectRepository implements IProjectRepository {
       orderBy: { name: 'asc' },
     });
     return rows.map(this.toDomain);
+  }
+
+  async listMappedAdoProjectIds(clientId: string): Promise<string[]> {
+    const rows = await this.prisma.project.findMany({
+      where: { clientId, adoProjectId: { not: null } },
+      select: { adoProjectId: true },
+    });
+    return rows.map(r => r.adoProjectId!);
   }
 
   async update(id: string, patch: UpdateProjectPatch): Promise<Project> {
@@ -205,16 +242,19 @@ export class PrismaProjectRepository implements IProjectRepository {
   private toDomain = (r: {
     id: string; clientId: string; name: string; slug: string;
     description: string | null; iconUrl?: string | null; isActive: boolean;
+    adoProjectId?: string | null; adoProjectName?: string | null;
     createdAt: Date; updatedAt: Date;
   }): Project => ({
-    id:          r.id,
-    clientId:    r.clientId,
-    name:        r.name,
-    slug:        r.slug,
-    description: r.description,
-    iconUrl:     r.iconUrl ?? null,
-    isActive:    r.isActive,
-    createdAt:   r.createdAt,
-    updatedAt:   r.updatedAt,
+    id:             r.id,
+    clientId:       r.clientId,
+    name:           r.name,
+    slug:           r.slug,
+    description:    r.description,
+    iconUrl:        r.iconUrl ?? null,
+    isActive:       r.isActive,
+    adoProjectId:   r.adoProjectId ?? null,
+    adoProjectName: r.adoProjectName ?? null,
+    createdAt:      r.createdAt,
+    updatedAt:      r.updatedAt,
   });
 }
