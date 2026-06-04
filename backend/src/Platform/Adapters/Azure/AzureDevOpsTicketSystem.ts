@@ -196,19 +196,26 @@ export class AzureDevOpsTicketSystem implements ITicketSystem {
     targetProjectId?: string,
   ): Promise<void> {
     const project = this.resolveProject(targetProjectId);
-    await this.patchApi(
-      'PATCH',
-      this.witUrl(project, `/workitems/${encodeURIComponent(externalId)}?api-version=7.1`),
-      [{
-        op:    'add',
-        path:  '/relations/-',
-        value: {
-          rel:        'AttachedFile',
-          url:        adoAttachmentUrl,
-          attributes: { comment: fileName },
-        },
-      }],
-    );
+    const url     = this.witUrl(project, `/workitems/${encodeURIComponent(externalId)}?api-version=7.1`);
+    const body: PatchOp[] = [{
+      op:    'add',
+      path:  '/relations/-',
+      value: { rel: 'AttachedFile', url: adoAttachmentUrl, attributes: { comment: fileName } },
+    }];
+
+    // ADO uses optimistic concurrency: concurrent PATCHes on the same work item return 409.
+    // Retry up to 3 times with short back-off — by the time we retry, the other PATCH has committed.
+    const DELAYS_MS = [300, 800, 2000];
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.patchApi('PATCH', url, body);
+        return;
+      } catch (err) {
+        const is409 = err instanceof Error && err.message.includes('409');
+        if (!is409 || attempt >= DELAYS_MS.length) throw err;
+        await new Promise<void>(resolve => setTimeout(resolve, DELAYS_MS[attempt]));
+      }
+    }
   }
 
   async downloadAttachment(url: string): Promise<{ data: Buffer; contentType: string } | null> {
