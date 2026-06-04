@@ -53,13 +53,24 @@ export class AttachmentsService {
     const saved = await this.deps.attachments.add(att);
 
     // Non-blocking ADO attachment sync
-    if (req.adoWorkItemId && this.deps.tickets) {
-      this.syncAttachmentToAdo(saved, cmd.data, req).catch(err =>
-        console.error(
-          `[AttachmentsService] ADO sync failed for "${saved.fileName}" → workItem ${req.adoWorkItemId}:`,
-          (err as Error).message ?? err,
-        ),
-      );
+    if (this.deps.tickets) {
+      if (req.adoWorkItemId) {
+        // Work item already exists — sync immediately
+        this.syncAttachmentToAdo(saved, cmd.data, req).catch(err =>
+          console.error(
+            `[AttachmentsService] ADO sync failed for "${saved.fileName}" → workItem ${req.adoWorkItemId}:`,
+            (err as Error).message ?? err,
+          ),
+        );
+      } else {
+        // ADO work item not yet created (fire-and-forget race) — poll until it appears
+        this.retrySyncAttachmentToAdo(saved, cmd.data, cmd.requestId, cmd.clientId).catch(err =>
+          console.error(
+            `[AttachmentsService] ADO retry sync failed for "${saved.fileName}":`,
+            (err as Error).message ?? err,
+          ),
+        );
+      }
     }
 
     const signedUrl = await this.deps.storage.getSignedUrl(saved.storageKey, this.signedUrlSeconds);
@@ -90,6 +101,27 @@ export class AttachmentsService {
   }
 
   // ── private helpers ───────────────────────────────────────────────────────
+
+  private async retrySyncAttachmentToAdo(
+    att:       Attachment,
+    data:      Buffer,
+    requestId: string,
+    clientId:  string,
+  ): Promise<void> {
+    const DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
+    for (const delay of DELAYS_MS) {
+      await new Promise<void>(resolve => setTimeout(resolve, delay));
+      const req = await this.deps.requests.findById(requestId, clientId);
+      if (!req) return; // request was deleted
+      if (req.adoWorkItemId) {
+        await this.syncAttachmentToAdo(att, data, req);
+        return;
+      }
+    }
+    console.warn(
+      `[AttachmentsService] ADO work item not available after retries — attachment "${att.fileName}" (request ${requestId}) not synced`,
+    );
+  }
 
   private async syncAttachmentToAdo(att: Attachment, data: Buffer, req: Request): Promise<void> {
     const tickets = this.deps.tickets!;

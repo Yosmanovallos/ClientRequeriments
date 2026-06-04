@@ -69,6 +69,19 @@ export class SupabaseFileStorage implements IFileStorage {
     return `${this.config.supabaseUrl.replace(/\/$/, '')}/storage/v1${path}`;
   }
 
+  async download(key: string): Promise<{ data: Buffer; contentType: string } | null> {
+    const url = `${this.base}/object/${this.config.bucket}/${encodeKey(key)}`;
+    const res = await fetch(url, { method: 'GET', headers: this.headers });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const msg = await res.text().catch(() => '');
+      throw new Error(`SupabaseFileStorage download failed: ${res.status} ${msg}`);
+    }
+    const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
+    const arrayBuffer = await res.arrayBuffer();
+    return { data: Buffer.from(arrayBuffer), contentType };
+  }
+
   async delete(key: string): Promise<void> {
     const url = `${this.base}/object/${this.config.bucket}/${encodeKey(key)}`;
     const res = await fetch(url, { method: 'DELETE', headers: this.headers });

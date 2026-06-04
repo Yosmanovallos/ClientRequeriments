@@ -74,4 +74,8 @@ export class LocalTicketSystem implements ITicketSystem {
   async listExternalWorkItemComments(_projectId: string, _workItemId: string): Promise<ExternalComment[]> {
     return [];
   }
+
+  async downloadAttachment(_url: string): Promise<{ data: Buffer; contentType: string } | null> {
+    return null;
+  }
 }

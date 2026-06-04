@@ -113,6 +113,10 @@ export class GitHubIssuesTicketSystem implements ITicketSystem {
     return [];
   }
 
+  async downloadAttachment(_url: string): Promise<{ data: Buffer; contentType: string } | null> {
+    return null;
+  }
+
   // ── private ─────────────────────────────────────────────────────────────
 
   private async api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {

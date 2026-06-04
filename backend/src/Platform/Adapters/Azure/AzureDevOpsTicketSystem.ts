@@ -211,6 +211,21 @@ export class AzureDevOpsTicketSystem implements ITicketSystem {
     );
   }
 
+  async downloadAttachment(url: string): Promise<{ data: Buffer; contentType: string } | null> {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': this.authHeader },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const msg = await res.text().catch(() => '');
+      throw new Error(`ADO attachment download failed ${res.status}: ${msg}`);
+    }
+    const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
+    const arrayBuffer = await res.arrayBuffer();
+    return { data: Buffer.from(arrayBuffer), contentType };
+  }
+
   // ── ITicketSystem: read operations ────────────────────────────────────────
 
   async listExternalProjects(): Promise<ExternalProject[]> {

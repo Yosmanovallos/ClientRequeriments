@@ -82,6 +82,12 @@ export interface ITicketSystem {
     targetProjectId?: string,
   ): Promise<void>;
 
+  /**
+   * Download an attachment by its external URL (e.g. an ADO attachment URL that requires auth).
+   * Returns null for adapters that do not support authenticated downloads (Local, GitHub).
+   */
+  downloadAttachment(url: string): Promise<{ data: Buffer; contentType: string } | null>;
+
   /** List all projects/repositories available in the external system. */
   listExternalProjects(): Promise<ExternalProject[]>;
   /** List work items in a given external project, with optional filters. */

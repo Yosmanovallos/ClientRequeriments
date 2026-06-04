@@ -18,6 +18,10 @@ export class LocalFileStorage implements IFileStorage {
     return `data:${entry.contentType};base64,${entry.data.toString('base64')}`;
   }
 
+  async download(key: string): Promise<{ data: Buffer; contentType: string } | null> {
+    return this.store.get(key) ?? null;
+  }
+
   async delete(key: string): Promise<void> {
     this.store.delete(key);
   }

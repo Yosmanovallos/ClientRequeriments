@@ -8,6 +8,7 @@ import type { INotifier }              from '../../Platform/Ports/INotifier.js';
 import { Errors }                      from '../../Shared/errors.js';
 
 const PROXY_URL_RE = /src="\/api\/comment-files\/([^"]+)"/g;
+const ADO_ATTACHMENT_RE = /src="(https?:\/\/(?:dev\.azure\.com|[^"]+\.visualstudio\.com)\/[^"]*\/_apis\/wit\/attachments\/[^"]+)"/g;
 
 interface Deps {
   comments:  ICommentsRepository;
@@ -44,17 +45,21 @@ export class CommentsService {
     };
     const saved = await this.deps.comments.add(comment);
 
-    // Mirror to ADO as HTML — non-fatal; save returned comment ID for dedup
+    // Mirror to ADO as HTML — non-fatal; upload portal images to ADO first so they render
     if (req.adoWorkItemId) {
-      const htmlBody = this.toHtml(sanitizedBody, cmd.author);
-      this.deps.tickets
-        .addComment(req.adoWorkItemId, htmlBody, req.adoProjectName ?? undefined)
-        .then(async (result) => {
+      const adoWorkItemId    = req.adoWorkItemId;
+      const adoProjectName   = req.adoProjectName ?? undefined;
+      (async () => {
+        try {
+          const htmlBody = await this.buildAdoHtml(sanitizedBody, cmd.author, adoProjectName);
+          const result   = await this.deps.tickets.addComment(adoWorkItemId, htmlBody, adoProjectName);
           if (result?.id) {
             await this.deps.comments.setAdoCommentId(saved.id, result.id);
           }
-        })
-        .catch(err => console.error('[CommentsService] ticket comment sync failed:', err));
+        } catch (err) {
+          console.error('[CommentsService] ticket comment sync failed:', err);
+        }
+      })();
     }
 
     // Hydrate images so the POST response has signed URLs (same as list())
@@ -90,10 +95,13 @@ export class CommentsService {
       if (existing) return existing;
     }
 
+    // Download ADO-hosted images and re-upload to portal storage so they render without ADO auth
+    const rehostedBody = await this.rehostAdoImages(body, req.clientId);
+
     return this.deps.comments.add({
       id:           crypto.randomUUID(),
       requestId:    req.id,
-      body,
+      body:         rehostedBody,
       author,
       authorUserId: null,
       visibility:   'public',
@@ -108,6 +116,78 @@ export class CommentsService {
   /** Format a portal comment as HTML for ADO Discussion. ADO renders HTML natively. */
   private toHtml(sanitizedHtml: string, author: string): string {
     return `<div><strong>${escapeHtml(author)}</strong> <span style="color:#888">&middot; via Provana Portal</span><br/>${sanitizedHtml}</div>`;
+  }
+
+  /**
+   * Build the HTML body for an ADO comment: upload any portal-proxied images to ADO
+   * so ADO servers can load them (proxy URLs are only accessible inside our own backend).
+   */
+  private async buildAdoHtml(sanitizedHtml: string, author: string, targetProjectId?: string): Promise<string> {
+    const keys: string[] = [];
+    let match: RegExpExecArray | null;
+    PROXY_URL_RE.lastIndex = 0;
+    while ((match = PROXY_URL_RE.exec(sanitizedHtml)) !== null) {
+      keys.push(match[1]!);
+    }
+
+    let html = sanitizedHtml;
+    if (keys.length > 0) {
+      const replacements = await Promise.all(
+        keys.map(async (key) => {
+          try {
+            const file = await this.deps.storage.download(key);
+            if (!file) return null;
+            const fileName = key.split('/').pop() ?? 'image.png';
+            const uploaded = await this.deps.tickets.uploadAttachment(fileName, file.data, file.contentType, targetProjectId);
+            if (!uploaded) return null;
+            return { key, adoUrl: uploaded.adoUrl };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const r of replacements) {
+        if (r) html = html.replace(`/api/comment-files/${r.key}`, r.adoUrl);
+      }
+    }
+
+    return this.toHtml(html, author);
+  }
+
+  /**
+   * Download ADO-hosted images and re-upload to portal storage so they render without ADO auth.
+   * ADO attachment URLs require Basic auth — browsers cannot load them directly.
+   */
+  private async rehostAdoImages(html: string, clientId: string): Promise<string> {
+    const urls: string[] = [];
+    let match: RegExpExecArray | null;
+    ADO_ATTACHMENT_RE.lastIndex = 0;
+    while ((match = ADO_ATTACHMENT_RE.exec(html)) !== null) {
+      urls.push(match[1]!);
+    }
+    if (urls.length === 0) return html;
+
+    const replacements = await Promise.all(
+      urls.map(async (url) => {
+        try {
+          const result = await this.deps.tickets.downloadAttachment(url);
+          if (!result) return null;
+          const fileId   = crypto.randomUUID();
+          const fileName = new URL(url).searchParams.get('fileName') ?? `image-${fileId}`;
+          const key      = `${clientId}/ado-images/${fileId}/${fileName}`;
+          await this.deps.storage.upload(key, result.data, result.contentType);
+          return { url, proxyPath: `/api/comment-files/${key}` };
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    let body = html;
+    for (const r of replacements) {
+      if (r) body = body.replace(`src="${r.url}"`, `src="${r.proxyPath}"`);
+    }
+    return body;
   }
 
   private async hydrateImages(c: Comment, clientId: string): Promise<Comment> {
