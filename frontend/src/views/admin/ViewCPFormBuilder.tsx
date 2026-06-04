@@ -3,6 +3,7 @@ import { formTemplatesApi, type FormFieldDef, type FormTemplate, type Conditiona
 import { api } from '../../api/client';
 import type { CPSection } from './ViewControlPanel';
 
+
 interface Props {
   projectId?:   string;
   editTemplate?: FormTemplate;
@@ -73,6 +74,18 @@ function blankField(): FieldDraft {
     placeholder: '', helpText: '', options: '',
     defaultVisible: true, displayLocation: 'left', conditions: [],
   };
+}
+
+function standardFieldDrafts(): FieldDraft[] {
+  return [
+    { name: 'filevineId',          label: 'Filevine Project ID',                    type: 'text',       required: false, placeholder: '', helpText: '', options: '',                               defaultVisible: true, displayLocation: 'left', conditions: [] },
+    { name: 'impactsAutomation',   label: 'Does this request impact automation?',   type: 'radio',      required: false, placeholder: '', helpText: '', options: 'Yes, No',                       defaultVisible: true, displayLocation: 'left', conditions: [] },
+    { name: 'environment',         label: 'Environment',                            type: 'checkbox',   required: false, placeholder: '', helpText: '', options: 'Production, UAT, Development',  defaultVisible: true, displayLocation: 'left', conditions: [] },
+    { name: 'priority',            label: 'Priority',                               type: 'select',     required: true,  placeholder: '', helpText: '', options: 'Highest, High, Medium, Low, Lowest', defaultVisible: true, displayLocation: 'left', conditions: [] },
+    { name: 'dueDate',             label: 'Due Date',                               type: 'date',       required: false, placeholder: '', helpText: '', options: '',                               defaultVisible: true, displayLocation: 'left', conditions: [] },
+    { name: 'notes',               label: 'Additional Notes',                       type: 'richtext',   required: false, placeholder: '', helpText: '', options: '',                               defaultVisible: true, displayLocation: 'left', conditions: [] },
+    { name: 'attachment',          label: 'Attachment',                             type: 'attachment', required: false, placeholder: '', helpText: '', options: '',                               defaultVisible: true, displayLocation: 'left', conditions: [] },
+  ];
 }
 
 function blankClause(): ConditionClauseDraft {
@@ -353,7 +366,7 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
   const [slug,    setSlug]    = useState(editTemplate?.slug ?? '');
   const [desc,    setDesc]    = useState(editTemplate?.description ?? '');
   const [fields,  setFields]  = useState<FieldDraft[]>(
-    editTemplate ? templateToFieldDrafts(editTemplate) : [blankField()],
+    editTemplate ? templateToFieldDrafts(editTemplate) : standardFieldDrafts(),
   );
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
@@ -434,10 +447,19 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
       });
       if (e) { setSaving(false); setError(e.message); return; }
 
-      // Bind the new template to the selected project only
+      // Append the new template to whatever configs already exist for this project
       if (projectId && created) {
+        const { data: existing } = await formTemplatesApi.listProjectConfigs(projectId);
+        const existingConfigs = (existing?.data ?? []).map((c, i) => ({
+          templateId: c.templateId,
+          isEnabled:  c.isEnabled,
+          sortOrder:  i,
+        }));
         await api.put<void>(`/projects/${projectId}/forms`, {
-          configs: [{ templateId: created.id, isEnabled: false, sortOrder: 999 }],
+          configs: [
+            ...existingConfigs,
+            { templateId: created.id, isEnabled: true, sortOrder: existingConfigs.length },
+          ],
         });
       }
       setSaving(false);

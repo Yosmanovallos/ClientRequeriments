@@ -17,6 +17,7 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
 
   const [projects,       setProjects]       = useState<AdminProject[]>([]);
   const [projConfigs,    setProjConfigs]    = useState<ProjectFormConfigEntry[]>([]);
+  const [allTemplates,   setAllTemplates]   = useState<FormTemplate[]>([]);
   const [selectedProjId, setSelectedProjId] = useState<string>(initialProjectId ?? '');
   const [enabledIds,     setEnabledIds]     = useState<Set<string>>(new Set());
   const [loading,        setLoading]        = useState(true);
@@ -32,6 +33,11 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
       .then(p => setProjects(p.data?.data ?? []))
       .catch(() => setError('Failed to load projects.'))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Load all templates once so we can show unconnected templates
+  useEffect(() => {
+    formTemplatesApi.listAll().then(({ data }) => setAllTemplates(data?.data ?? []));
   }, []);
 
   // Load project configs whenever the selected project changes
@@ -50,8 +56,31 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   // Display exactly what this project has configured — nothing more, nothing less
   const displayTemplates: FormTemplate[] = projConfigs.map(c => c.template);
 
+  // Templates that exist but aren't yet connected to this project
+  const connectedIds = new Set(projConfigs.map(c => c.templateId));
+  const availableTemplates = allTemplates.filter(t => !connectedIds.has(t.id));
+
   const toggleTemplate = (id: string) =>
     setEnabledIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
+  const addTemplate = (t: FormTemplate) => {
+    setProjConfigs(prev => [
+      ...prev,
+      { id: '', projectId: selectedProjId, templateId: t.id, isEnabled: true, sortOrder: prev.length, template: t },
+    ]);
+    setEnabledIds(prev => new Set([...prev, t.id]));
+  };
+
+  const addAllStandardTemplates = () => {
+    const toAdd = availableTemplates.filter(t => t.isStandard);
+    if (toAdd.length === 0) return;
+    setProjConfigs(prev => {
+      const next = [...prev];
+      toAdd.forEach((t, i) => next.push({ id: '', projectId: selectedProjId, templateId: t.id, isEnabled: true, sortOrder: prev.length + i, template: t }));
+      return next;
+    });
+    setEnabledIds(prev => new Set([...prev, ...toAdd.map(t => t.id)]));
+  };
 
   const handleSave = async () => {
     if (!selectedProjId) return;
@@ -194,6 +223,58 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
               </span>
             )}
           </div>
+
+          {availableTemplates.length > 0 && (
+            <div style={{ marginTop: 32 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--ink-2)' }}>
+                  Available templates ({availableTemplates.length})
+                </h3>
+                {availableTemplates.some(t => t.isStandard) && (
+                  <button
+                    className="topnav-action"
+                    style={{ fontSize: 12, padding: '4px 12px' }}
+                    onClick={addAllStandardTemplates}
+                  >
+                    + Add all standard templates
+                  </button>
+                )}
+              </div>
+              <div className="users-table-wrap">
+                <table className="cp-table">
+                  <thead>
+                    <tr>
+                      <th>Template</th>
+                      <th>Slug</th>
+                      <th>Type</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableTemplates.map(t => (
+                      <tr key={t.id}>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                          {t.description && <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t.description}</div>}
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace' }}>{t.slug}</td>
+                        <td style={{ fontSize: 12, color: 'var(--muted)' }}>{t.isStandard ? 'Standard' : 'Custom'}</td>
+                        <td>
+                          <button
+                            className="topnav-action"
+                            style={{ fontSize: 12, padding: '2px 10px' }}
+                            onClick={() => addTemplate(t)}
+                          >
+                            + Add
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

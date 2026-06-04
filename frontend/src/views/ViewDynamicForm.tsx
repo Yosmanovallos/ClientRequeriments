@@ -89,8 +89,7 @@ export default function ViewDynamicForm({ template }: Props) {
     const priority  = values['priority']  ?? 'Medium';
     const dueDate   = values['dueDate']   ?? null;
 
-    const requestType = template.slug.replace(/-/g, '_') as
-      'new_report' | 'new_page' | 'new_feature' | 'fix_issue' | 'view_request';
+    const requestType = template.slug;
 
     const firstTextField = fields.find(f => f.type === 'text');
     const title = (firstTextField ? values[firstTextField.name] : '') || template.name;
