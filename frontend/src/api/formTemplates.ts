@@ -54,6 +54,7 @@ export interface FormTemplate {
   slug:        string;
   description: string | null;
   isStandard:  boolean;
+  status:      string;   // 'draft' | 'published'
   fieldSchema: FormFieldDef[];
 }
 
@@ -83,11 +84,12 @@ export const formTemplatesApi = {
     name: string;
     slug: string;
     description?: string;
+    status?: string;
     fieldSchema: FormFieldDef[];
   }) {
     return api.post<FormTemplate>('/form-templates', payload);
   },
-  update(id: string, patch: { name?: string; description?: string; fieldSchema?: FormFieldDef[] }) {
+  update(id: string, patch: { name?: string; description?: string; status?: string; fieldSchema?: FormFieldDef[] }) {
     return api.patch<FormTemplate>(`/form-templates/${id}`, patch);
   },
   remove(id: string) {

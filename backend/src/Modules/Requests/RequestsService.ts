@@ -7,6 +7,7 @@ import type { IFormTemplateRepository }                        from '../FormTemp
 import type { FormFieldDef }                                   from '../FormTemplates/FormTemplate';
 import { evaluateConditions }                                  from '../FormTemplates/conditionEngine';
 import { Errors }                                              from '../../Shared/errors';
+import sanitizeHtml                                            from 'sanitize-html';
 
 // Demo client settings — Phase 3 loads these from the DB clients table.
 const CLIENT_PREFIX: Record<string, string> = {
@@ -40,11 +41,13 @@ export class RequestsService {
       if (existing) return this.toSummary(existing);
     }
 
-    // Condition-aware payload validation (when template is known)
+    // Condition-aware payload validation + snapshot capture (when template is known)
+    let templateSnapshot: string | null = null;
     if (cmd.templateId && this.deps.formTemplates) {
       const tpl = await this.deps.formTemplates.findById(cmd.templateId);
       if (tpl && tpl.clientId === cmd.clientId) {
         this.validatePayloadWithConditions(tpl.fieldSchema, cmd.payload as Record<string, unknown>);
+        templateSnapshot = JSON.stringify(tpl.fieldSchema);
       }
     }
 
@@ -52,7 +55,7 @@ export class RequestsService {
     const reference = await this.deps.repo.nextReference(cmd.clientId, prefix);
     const id        = crypto.randomUUID();
 
-    const req = await this.deps.repo.create({ ...cmd, id, reference });
+    const req = await this.deps.repo.create({ ...cmd, id, reference, templateSnapshot });
 
     // Outbox pattern — fire ticket creation after DB write.
     // In Phase 3 this becomes an outbox worker; for now it runs inline.
@@ -227,7 +230,7 @@ export class RequestsService {
 
         if (fieldDef?.type === 'richtext' && typeof val === 'string' && val) {
           // Rich text goes into a separate section below the table
-          notesSections += `<h2>${escapeHtml(label)}</h2><div>${val}</div>`;
+          notesSections += `<h2>${escapeHtml(label)}</h2><div>${sanitizeHtml(val)}</div>`;
           return null;
         }
         if (fieldDef?.type === 'attachment') return null;

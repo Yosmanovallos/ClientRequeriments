@@ -38,7 +38,8 @@ export class PrismaRequestsRepository implements IRequestsRepository {
           payload:        JSON.stringify(cmd.payload),
           idempotencyKey: cmd.idempotencyKey,
           createdBy:      cmd.createdBy,
-          adoProjectName: cmd.adoProjectName ?? null,
+          adoProjectName:   cmd.adoProjectName ?? null,
+          templateSnapshot: cmd.templateSnapshot ?? null,
         },
       });
       await tx.statusHistory.create({
@@ -172,6 +173,7 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     idempotencyKey: string | null; createdBy: string | null;
     adoWorkItemId: string | null; adoWorkItemUrl: string | null;
     adoProjectName?: string | null; adoAssignedTo?: string | null;
+    templateSnapshot?: string | null;
     createdAt: Date; updatedAt: Date;
     organization?: { name: string } | null;
   }): Request => ({
@@ -192,9 +194,10 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     createdBy:       r.createdBy,
     adoWorkItemId:   r.adoWorkItemId,
     adoWorkItemUrl:  r.adoWorkItemUrl,
-    adoProjectName:  r.adoProjectName ?? null,
-    adoAssignedTo:   r.adoAssignedTo ?? null,
-    createdAt:       r.createdAt,
-    updatedAt:       r.updatedAt,
+    adoProjectName:   r.adoProjectName ?? null,
+    adoAssignedTo:    r.adoAssignedTo ?? null,
+    templateSnapshot: r.templateSnapshot ?? null,
+    createdAt:        r.createdAt,
+    updatedAt:        r.updatedAt,
   });
 }

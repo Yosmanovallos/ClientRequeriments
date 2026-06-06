@@ -3,6 +3,7 @@ import { requestsApi, type RequestDetail, type Comment, type StatusHistoryEntry 
 import { attachmentsApi, type AttachmentView } from '../api/attachments';
 import { formTemplatesApi, type FormTemplate } from '../api/formTemplates';
 import { fmtDate, fmtCommentDate, STATUS_COLORS, TYPE_LABEL } from '../lib/utils';
+import { sanitizeHtml } from '../lib/sanitize';
 import { useApp } from '../context/AppContext';
 import CommentEditor, { type CommentEditorHandle } from '../components/CommentEditor';
 import CommentBody from '../components/CommentBody';
@@ -90,7 +91,14 @@ export default function ViewRequestDetail({ requestId }: Props) {
       setComments((c as { data: Comment[] } | null)?.data ?? []);
       setAttachments(a ?? []);
       setLoading(false);
-      if (r?.projectId) {
+      if (r?.templateSnapshot) {
+        // Use the frozen snapshot captured at submission time
+        try {
+          const fieldSchema = JSON.parse(r.templateSnapshot);
+          setTemplate({ id: '', clientId: '', name: '', slug: r.requestType, description: null, isStandard: false, status: 'published', fieldSchema });
+        } catch {}
+      } else if (r?.projectId) {
+        // Legacy requests: fall back to fetching the current template
         const slug = r.requestType.replace(/_/g, '-');
         formTemplatesApi.listByProject(r.projectId)
           .then(({ data }) => setTemplate(data?.data.find(t => t.slug === slug) ?? null))
@@ -248,7 +256,7 @@ export default function ViewRequestDetail({ requestId }: Props) {
                             </dt>
                             <dd className="payload-value">
                               {f.type === 'richtext'
-                                ? <div dangerouslySetInnerHTML={{ __html: val as string }} />
+                                ? <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(val as string) }} />
                                 : f.type === 'date'
                                   ? <span>{fmtDisplayDate(val as string)}</span>
                                   : <span>{String(val)}</span>}
@@ -454,7 +462,7 @@ export default function ViewRequestDetail({ requestId }: Props) {
                     <div className="aside-label">{f.label}</div>
                     <div className="aside-value">
                       {f.type === 'richtext'
-                        ? <div dangerouslySetInnerHTML={{ __html: val as string }} />
+                        ? <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(val as string) }} />
                         : f.type === 'date'
                           ? fmtDisplayDate(val as string)
                           : String(val)}

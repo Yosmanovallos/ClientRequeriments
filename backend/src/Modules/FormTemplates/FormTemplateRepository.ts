@@ -35,6 +35,7 @@ export class InMemoryFormTemplateRepository implements IFormTemplateRepository {
       slug:        cmd.slug,
       description: cmd.description ?? null,
       isStandard:  cmd.isStandard ?? false,
+      status:      cmd.status ?? 'draft',
       fieldSchema: cmd.fieldSchema,
       createdAt:   now,
       updatedAt:   now,
@@ -120,7 +121,7 @@ export class InMemoryFormTemplateRepository implements IFormTemplateRepository {
 
     return enabledIds
       .map(id => this.templates.get(id))
-      .filter((t): t is FormTemplate => t !== undefined);
+      .filter((t): t is FormTemplate => t !== undefined && t.status === 'published');
   }
 }
 
@@ -136,6 +137,7 @@ export class PrismaFormTemplateRepository implements IFormTemplateRepository {
         slug:        cmd.slug,
         description: cmd.description ?? null,
         isStandard:  cmd.isStandard ?? false,
+        status:      cmd.status ?? 'draft',
         fieldSchema: JSON.stringify(cmd.fieldSchema),
       },
     });
@@ -166,6 +168,7 @@ export class PrismaFormTemplateRepository implements IFormTemplateRepository {
     const data: Record<string, unknown> = {};
     if (patch.name !== undefined)        data.name = patch.name;
     if (patch.description !== undefined) data.description = patch.description;
+    if (patch.status !== undefined)      data.status = patch.status;
     if (patch.fieldSchema !== undefined) data.fieldSchema = JSON.stringify(patch.fieldSchema);
     const row = await this.prisma.formTemplate.update({ where: { id }, data });
     return this.toDomain(row);
@@ -210,7 +213,7 @@ export class PrismaFormTemplateRepository implements IFormTemplateRepository {
 
   async listEnabledTemplates(projectId: string): Promise<FormTemplate[]> {
     const rows = await this.prisma.projectFormConfig.findMany({
-      where:   { projectId, isEnabled: true },
+      where:   { projectId, isEnabled: true, template: { status: 'published' } },
       orderBy: { sortOrder: 'asc' },
       include: { template: true },
     });
@@ -219,7 +222,7 @@ export class PrismaFormTemplateRepository implements IFormTemplateRepository {
 
   private toDomain = (r: {
     id: string; clientId: string; name: string; slug: string;
-    description: string | null; isStandard: boolean; fieldSchema: string;
+    description: string | null; isStandard: boolean; status: string; fieldSchema: string;
     createdAt: Date; updatedAt: Date;
   }): FormTemplate => {
     let parsed: FormFieldDef[] = [];
@@ -231,6 +234,7 @@ export class PrismaFormTemplateRepository implements IFormTemplateRepository {
       slug:        r.slug,
       description: r.description,
       isStandard:  r.isStandard,
+      status:      r.status,
       fieldSchema: parsed,
       createdAt:   r.createdAt,
       updatedAt:   r.updatedAt,

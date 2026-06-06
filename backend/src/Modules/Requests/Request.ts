@@ -30,10 +30,11 @@ export interface Request {
   createdBy:       string | null;    // email of submitter; null for legacy requests
   adoWorkItemId:   string | null;
   adoWorkItemUrl:  string | null;
-  adoProjectName:  string | null;  // denormalized from Project.adoProjectName at creation
-  adoAssignedTo:   string | null;  // synced from ADO System.AssignedTo via webhook
-  createdAt:       Date;
-  updatedAt:       Date;
+  adoProjectName:    string | null;  // denormalized from Project.adoProjectName at creation
+  adoAssignedTo:     string | null;  // synced from ADO System.AssignedTo via webhook
+  templateSnapshot:  string | null;  // fieldSchema JSON frozen at request creation time
+  createdAt:         Date;
+  updatedAt:         Date;
 }
 
 export interface StatusHistoryEntry {
@@ -58,5 +59,6 @@ export interface CreateRequestCmd {
   payload:         Record<string, unknown>;
   idempotencyKey:  string | null;
   createdBy:       string;           // email
-  adoProjectName?: string | null;    // passed from endpoint layer; written to DB and used for targetProjectId
+  adoProjectName?:   string | null;  // passed from endpoint layer; written to DB and used for targetProjectId
+  templateSnapshot?: string | null;  // fieldSchema JSON frozen at creation; omitted → null stored
 }

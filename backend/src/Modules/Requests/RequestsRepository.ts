@@ -59,10 +59,11 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
       createdBy:       cmd.createdBy,
       adoWorkItemId:   null,
       adoWorkItemUrl:  null,
-      adoProjectName:  cmd.adoProjectName ?? null,
-      adoAssignedTo:   null,
-      createdAt:       now,
-      updatedAt:       now,
+      adoProjectName:   cmd.adoProjectName ?? null,
+      adoAssignedTo:    null,
+      templateSnapshot: cmd.templateSnapshot ?? null,
+      createdAt:        now,
+      updatedAt:        now,
     };
     this.requests.set(cmd.id, req);
     await this.recordHistory(cmd.id, null, 'NEW', 'portal', cmd.createdBy);

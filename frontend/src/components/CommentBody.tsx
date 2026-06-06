@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ImageLightbox from './ImageLightbox';
+import { sanitizeHtml } from '../lib/sanitize';
 
 interface Props {
   body: string;
@@ -16,8 +17,7 @@ function escapeHtml(text: string): string {
 
 /**
  * Renders a comment body.
- * - Rich-text (HTML): body starts with '<' — rendered via dangerouslySetInnerHTML.
- *   Body is server-sanitized; no client re-sanitization needed.
+ * - Rich-text (HTML): body starts with '<' — sanitized via DOMPurify before rendering.
  *   Clicking an image opens a lightbox.
  * - Legacy plain-text: escaped and wrapped in <p>.
  */
@@ -45,9 +45,8 @@ export default function CommentBody({ body }: Props) {
       <div
         ref={containerRef}
         className="comment-body"
-        // Body is sanitized server-side; legacy path escapes before rendering
         dangerouslySetInnerHTML={{
-          __html: isHtml ? body : `<p>${escapeHtml(body)}</p>`,
+          __html: isHtml ? sanitizeHtml(body) : `<p>${escapeHtml(body)}</p>`,
         }}
       />
       {lightbox && (

@@ -38,6 +38,7 @@ export function registerFormTemplateEndpoints(
       name:        parsed.data.name,
       slug:        parsed.data.slug,
       description: parsed.data.description ?? null,
+      status:      parsed.data.status ?? 'draft',
       fieldSchema: parsed.data.fieldSchema,
     });
     return reply.status(201).send(tpl);

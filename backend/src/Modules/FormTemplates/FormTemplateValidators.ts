@@ -116,6 +116,7 @@ export const CreateTemplateSchema = z.object({
   name:        z.string().min(1).max(128),
   slug:        z.string().min(1).max(64).regex(SLUG_RX, 'slug must be lowercase letters, digits, and hyphens'),
   description: z.string().max(2000).nullable().optional(),
+  status:      z.enum(['draft', 'published']).optional(),
   fieldSchema: FieldSchemaArraySchema,
   /** SuperAdmin-only: target a specific client. */
   clientId:    z.string().uuid().optional(),
@@ -124,6 +125,7 @@ export const CreateTemplateSchema = z.object({
 export const UpdateTemplateSchema = z.object({
   name:        z.string().min(1).max(128).optional(),
   description: z.string().max(2000).nullable().optional(),
+  status:      z.enum(['draft', 'published']).optional(),
   fieldSchema: FieldSchemaArraySchema.optional(),
 });
 

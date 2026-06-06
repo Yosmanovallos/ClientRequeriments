@@ -116,6 +116,7 @@ model FormTemplate {
   slug        String   @db.VarChar(64)
   description String?  @db.Text
   isStandard  Boolean  @default(false) @map("is_standard")
+  status      String   @default("published") @db.VarChar(16)  // draft | published; default keeps existing rows live
   fieldSchema String   @map("field_schema") @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -164,8 +165,9 @@ model Request {
   adoWorkItemId  String?   @map("ado_work_item_id") @db.VarChar(64)
   adoWorkItemUrl String?   @map("ado_work_item_url")
   adoProjectName String?   @map("ado_project_name") @db.VarChar(256)  // denormalized from Project.adoProjectName at create time
-  adoAssignedTo  String?   @map("ado_assigned_to")  @db.VarChar(255)  // synced from ADO System.AssignedTo on webhook
-  createdAt      DateTime  @default(now()) @map("created_at")
+  adoAssignedTo    String?   @map("ado_assigned_to")    @db.VarChar(255)  // synced from ADO System.AssignedTo on webhook
+  templateSnapshot String?   @map("template_snapshot")  @db.Text          // fieldSchema JSON frozen at request creation time
+  createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   client       Client          @relation(fields: [clientId], references: [id])

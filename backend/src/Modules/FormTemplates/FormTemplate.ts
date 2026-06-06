@@ -68,6 +68,7 @@ export interface FormTemplate {
   slug:        string;
   description: string | null;
   isStandard:  boolean;            // true = seeded system template, cannot be deleted
+  status:      string;             // 'draft' | 'published'
   fieldSchema: FormFieldDef[];     // parsed (repository writes/reads the JSON string)
   createdAt:   Date;
   updatedAt:   Date;
@@ -78,12 +79,14 @@ export interface CreateFormTemplateCmd {
   name:        string;
   slug:        string;
   description?: string | null;
+  status?:     string;             // defaults to 'draft' in service layer
   fieldSchema: FormFieldDef[];
 }
 
 export interface UpdateFormTemplatePatch {
   name?:        string;
   description?: string | null;
+  status?:      string;            // 'draft' | 'published'
   fieldSchema?: FormFieldDef[];
 }
 

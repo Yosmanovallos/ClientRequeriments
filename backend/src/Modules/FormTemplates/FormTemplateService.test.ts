@@ -108,9 +108,9 @@ describe('FormTemplateService.delete', () => {
 describe('Per-project form configuration', () => {
   it('listEnabledForProject returns only isEnabled=true, in sortOrder', async () => {
     const { svc } = makeSvc();
-    const t1 = await svc.create({ clientId: CLIENT_A, name: 'T1', slug: 't1', fieldSchema: sampleFields });
-    const t2 = await svc.create({ clientId: CLIENT_A, name: 'T2', slug: 't2', fieldSchema: sampleFields });
-    const t3 = await svc.create({ clientId: CLIENT_A, name: 'T3', slug: 't3', fieldSchema: sampleFields });
+    const t1 = await svc.create({ clientId: CLIENT_A, name: 'T1', slug: 't1', status: 'published', fieldSchema: sampleFields });
+    const t2 = await svc.create({ clientId: CLIENT_A, name: 'T2', slug: 't2', status: 'published', fieldSchema: sampleFields });
+    const t3 = await svc.create({ clientId: CLIENT_A, name: 'T3', slug: 't3', status: 'published', fieldSchema: sampleFields });
     const projectId = '00000000-0000-0000-0000-0000000000aa';
 
     await svc.setProjectConfigs(projectId, [

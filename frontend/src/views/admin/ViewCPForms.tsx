@@ -26,6 +26,7 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const [saveMsg,        setSaveMsg]        = useState('');
   const [error,          setError]          = useState<string | null>(null);
   const [deletingId,     setDeletingId]     = useState<string | null>(null);
+  const [publishingId,   setPublishingId]   = useState<string | null>(null);
 
   // Load projects once
   useEffect(() => {
@@ -105,6 +106,19 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
   };
 
+  const handleTogglePublish = async (t: FormTemplate) => {
+    setPublishingId(t.id);
+    const newStatus = t.status === 'published' ? 'draft' : 'published';
+    try {
+      const { error: err } = await formTemplatesApi.update(t.id, { status: newStatus });
+      if (err) { setSaveMsg('Error: ' + err.message); return; }
+      setAllTemplates(prev => prev.map(x => x.id === t.id ? { ...x, status: newStatus } : x));
+      setProjConfigs(prev => prev.map(c => c.templateId === t.id ? { ...c, template: { ...c.template, status: newStatus } } : c));
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
   const handleDelete = async (t: FormTemplate) => {
     if (!window.confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
     setDeletingId(t.id);
@@ -161,6 +175,7 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                     <th>Template</th>
                     <th>Slug</th>
                     <th>Type</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
                     <th style={{ textAlign: 'center' }}>Enabled</th>
                     <th>Actions</th>
                   </tr>
@@ -168,7 +183,7 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                 <tbody>
                   {displayTemplates.length === 0 && (
                     <tr>
-                      <td colSpan={5} style={{ color: 'var(--muted)', fontSize: 14, textAlign: 'center', padding: '28px 0' }}>
+                      <td colSpan={6} style={{ color: 'var(--muted)', fontSize: 14, textAlign: 'center', padding: '28px 0' }}>
                         No templates yet. Click &quot;+ New Template&quot; to create one.
                       </td>
                     </tr>
@@ -182,6 +197,19 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                       <td style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace' }}>{t.slug}</td>
                       <td style={{ fontSize: 12, color: 'var(--muted)' }}>
                         {t.isStandard ? 'Standard' : 'Custom'}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          onClick={() => handleTogglePublish(t)}
+                          disabled={publishingId === t.id}
+                          style={{
+                            fontSize: 11, padding: '2px 10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 600,
+                            background: t.status === 'published' ? '#d4edda' : '#fff3cd',
+                            color: t.status === 'published' ? '#155724' : '#856404',
+                          }}
+                        >
+                          {publishingId === t.id ? '…' : t.status === 'published' ? 'Published' : 'Draft'}
+                        </button>
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <input type="checkbox" checked={enabledIds.has(t.id)}

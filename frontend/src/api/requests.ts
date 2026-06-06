@@ -18,6 +18,7 @@ export interface RequestSummary {
   adoWorkItemUrl:   string | null;
   adoProjectName:   string | null;
   adoAssignedTo:    string | null;
+  templateSnapshot: string | null;
   payloadData:      Record<string, unknown>;
 }
 
