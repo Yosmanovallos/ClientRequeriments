@@ -9,11 +9,6 @@ import { evaluateConditions }                                  from '../FormTemp
 import { Errors }                                              from '../../Shared/errors';
 import sanitizeHtml                                            from 'sanitize-html';
 
-// Demo client settings — Phase 3 loads these from the DB clients table.
-const CLIENT_PREFIX: Record<string, string> = {
-  '00000000-0000-0000-0000-000000000001': 'CBLPBR',
-};
-
 /** Portal priority string → ADO integer (1–4). Matches Microsoft.VSTS.Common.Priority. */
 const PRIORITY_MAP: Record<string, number> = {
   Highest: 1, High: 2, Medium: 3, Low: 4, Lowest: 4,
@@ -51,8 +46,11 @@ export class RequestsService {
       }
     }
 
-    const prefix    = CLIENT_PREFIX[cmd.clientId] ?? 'REQ';
-    const reference = await this.deps.repo.nextReference(cmd.clientId, prefix);
+    const projectId = cmd.projectId;
+    const prefix    = projectId
+      ? ((await this.deps.repo.findProjectPrefix(projectId)) ?? 'REQ')
+      : 'REQ';
+    const reference = await this.deps.repo.nextReference(projectId ?? cmd.clientId, prefix);
     const id        = crypto.randomUUID();
 
     const req = await this.deps.repo.create({ ...cmd, id, reference, templateSnapshot });

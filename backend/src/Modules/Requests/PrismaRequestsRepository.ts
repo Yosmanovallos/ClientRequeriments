@@ -149,15 +149,23 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     }));
   }
 
+  async findProjectPrefix(projectId: string): Promise<string | null> {
+    const p = await this.prisma.project.findUnique({
+      where:  { id: projectId },
+      select: { prefix: true },
+    });
+    return p?.prefix ?? null;
+  }
+
   /**
-   * Generate the next per-client reference (e.g. CBLPBR-630).
-   * UPSERT + RETURNING is atomic at the row level in Postgres, so concurrent
-   * callers for the same clientId get distinct sequential values.
+   * Generate the next per-project reference (e.g. CFGMBR-1).
+   * UPSERT is atomic at the row level in Postgres, so concurrent callers
+   * for the same projectId get distinct sequential values.
    */
-  async nextReference(clientId: string, prefix: string): Promise<string> {
-    const row = await this.prisma.clientRefCounter.upsert({
-      where:  { clientId },
-      create: { clientId, lastValue: 1 },
+  async nextReference(projectId: string, prefix: string): Promise<string> {
+    const row = await this.prisma.projectRefCounter.upsert({
+      where:  { projectId },
+      create: { projectId, lastValue: 1 },
       update: { lastValue: { increment: 1 } },
     });
     return `${prefix}-${row.lastValue}`;

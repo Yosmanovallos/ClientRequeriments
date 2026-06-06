@@ -72,6 +72,10 @@ model Project {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt        @map("updated_at")
 
+  // Reference number prefix for requests in this project (e.g. CFGMBR, CSNDBR, CBLGBR).
+  // Null on legacy projects; RequestsService falls back to 'REQ' when unset.
+  prefix String? @db.VarChar(16)
+
   // Azure DevOps mapping — nullable so legacy local projects and non-ADO deployments are unaffected.
   adoProjectId   String?  @map("ado_project_id")   @db.VarChar(64)   // ADO project GUID
   adoProjectName String?  @map("ado_project_name") @db.VarChar(256)  // denormalized display name
@@ -81,6 +85,7 @@ model Project {
   requests      Request[]
   formConfigs   ProjectFormConfig[]
   organizations Organization[]
+  refCounter    ProjectRefCounter?
 
   @@unique([clientId, slug])
   @@unique([clientId, adoProjectId])
@@ -257,6 +262,17 @@ model ClientRefCounter {
   client Client @relation(fields: [clientId], references: [id])
 
   @@map("client_ref_counters")
+}
+
+// Per-project reference counter — replaces the per-client counter so each project
+// has its own independent sequence (e.g. CFGMBR-1, CSNDBR-1, CBLGBR-1).
+model ProjectRefCounter {
+  projectId String @id @map("project_id") @db.Uuid
+  lastValue Int    @default(0) @map("last_value")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("project_ref_counters")
 }
 
 // Organization — a sub-entity of a Project used to scope ticket visibility.

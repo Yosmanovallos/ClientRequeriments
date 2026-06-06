@@ -36,13 +36,13 @@ describe('RequestsService', () => {
   beforeEach(() => { ctx = makeService(); });
 
   describe('create()', () => {
-    it('assigns a CBLPBR-### reference for the demo client', async () => {
+    it('assigns a REQ-### reference when no project prefix is configured', async () => {
       const result = await ctx.svc.create({
-        clientId: DEMO_CLIENT, requestType: 'new_report', title: 'Test',
+        clientId: DEMO_CLIENT, projectId: null, requestType: 'new_report', title: 'Test',
         priority: 'Medium', dueDate: null, payload: {}, idempotencyKey: null,
         createdBy: 'tester@example.com',
       });
-      expect(result.reference).toMatch(/^CBLPBR-\d+$/);
+      expect(result.reference).toMatch(/^REQ-\d+$/);
       expect(result.status).toBe('NEW');
       expect(result.title).toBe('Test');
     });

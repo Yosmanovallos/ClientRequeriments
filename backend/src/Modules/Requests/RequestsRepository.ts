@@ -27,7 +27,10 @@ export interface IRequestsRepository {
     title?: string;
   }): Promise<void>;
   getHistory(requestId: string): Promise<StatusHistoryEntry[]>;
-  nextReference(clientId: string, prefix: string): Promise<string>;
+  /** Return the prefix configured for this project (e.g. "CFGMBR"), or null if unset. */
+  findProjectPrefix(projectId: string): Promise<string | null>;
+  /** Atomically increment the per-project counter and return the formatted reference (e.g. "CFGMBR-1"). */
+  nextReference(projectId: string, prefix: string): Promise<string>;
 }
 
 /**
@@ -141,11 +144,14 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
     return this.history.get(requestId) ?? [];
   }
 
-  async nextReference(clientId: string, prefix: string): Promise<string> {
-    // Seed at 629 for the demo client so refs continue from CBLPBR-630 (matches legacy demo data).
-    const start = this.counters.get(clientId) ?? (prefix === 'CBLPBR' ? 629 : 0);
+  async findProjectPrefix(_projectId: string): Promise<string | null> {
+    return null; // in-memory mode has no project metadata
+  }
+
+  async nextReference(projectId: string, prefix: string): Promise<string> {
+    const start = this.counters.get(projectId) ?? 0;
     const next  = start + 1;
-    this.counters.set(clientId, next);
+    this.counters.set(projectId, next);
     return `${prefix}-${next}`;
   }
 
