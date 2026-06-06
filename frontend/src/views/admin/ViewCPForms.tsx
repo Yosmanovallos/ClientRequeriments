@@ -26,6 +26,7 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const [saveMsg,        setSaveMsg]        = useState('');
   const [error,          setError]          = useState<string | null>(null);
   const [deletingId,     setDeletingId]     = useState<string | null>(null);
+  const [confirmTarget,  setConfirmTarget]  = useState<FormTemplate | null>(null);
 
   // Load projects once
   useEffect(() => {
@@ -99,7 +100,13 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   };
 
   const handleDelete = async (t: FormTemplate) => {
-    if (!window.confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
+    setConfirmTarget(t);
+  };
+
+  const confirmDelete = async () => {
+    const t = confirmTarget;
+    if (!t) return;
+    setConfirmTarget(null);
     setDeletingId(t.id);
     try {
       const { error: err } = await formTemplatesApi.removeFromProject(selectedProjId, t.id);
@@ -118,6 +125,8 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
       setDeletingId(null);
     }
   };
+
+  const cancelDelete = () => setConfirmTarget(null);
 
   if (loading) return <LoadingSpinner />;
   if (error)   return <p style={{ color: 'var(--ink-2)' }}>{error}</p>;
@@ -286,6 +295,30 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
             </div>
           )}
         </>
+      )}
+
+      {confirmTarget && (
+        <div className="modal-overlay" onClick={cancelDelete}>
+          <div className="modal-card" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">Delete template?</h3>
+            <p className="modal-sub" style={{ marginBottom: 8 }}>
+              <strong>{confirmTarget.name}</strong>
+            </p>
+            <p style={{ fontSize: 14, color: 'var(--ink-2)', margin: '0 0 4px' }}>
+              This will permanently remove the template
+              {confirmTarget.isStandard ? ' from this project.' : ' and all its data. This cannot be undone.'}
+            </p>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={cancelDelete}>Cancel</button>
+              <button
+                style={{ height: 38, padding: '0 20px', border: 'none', borderRadius: 6, background: '#c0392b', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+                onClick={confirmDelete}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
