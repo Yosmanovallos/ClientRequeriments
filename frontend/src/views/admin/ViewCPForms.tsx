@@ -26,7 +26,6 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   const [saveMsg,        setSaveMsg]        = useState('');
   const [error,          setError]          = useState<string | null>(null);
   const [deletingId,     setDeletingId]     = useState<string | null>(null);
-  const [publishingId,   setPublishingId]   = useState<string | null>(null);
 
   // Load projects once
   useEffect(() => {
@@ -104,19 +103,6 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     const configs = data?.data ?? [];
     setProjConfigs(configs);
     setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
-  };
-
-  const handleTogglePublish = async (t: FormTemplate) => {
-    setPublishingId(t.id);
-    const newStatus = t.status === 'published' ? 'draft' : 'published';
-    try {
-      const { error: err } = await formTemplatesApi.update(t.id, { status: newStatus });
-      if (err) { setSaveMsg('Error: ' + err.message); return; }
-      setAllTemplates(prev => prev.map(x => x.id === t.id ? { ...x, status: newStatus } : x));
-      setProjConfigs(prev => prev.map(c => c.templateId === t.id ? { ...c, template: { ...c.template, status: newStatus } } : c));
-    } finally {
-      setPublishingId(null);
-    }
   };
 
   const handleDelete = async (t: FormTemplate) => {
@@ -199,17 +185,13 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                         {t.isStandard ? 'Standard' : 'Custom'}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <button
-                          onClick={() => handleTogglePublish(t)}
-                          disabled={publishingId === t.id}
-                          style={{
-                            fontSize: 11, padding: '2px 10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 600,
-                            background: t.status === 'published' ? '#d4edda' : '#fff3cd',
-                            color: t.status === 'published' ? '#155724' : '#856404',
-                          }}
-                        >
-                          {publishingId === t.id ? '…' : t.status === 'published' ? 'Published' : 'Draft'}
-                        </button>
+                        <span style={{
+                          fontSize: 11, padding: '2px 10px', borderRadius: 10, fontWeight: 600, display: 'inline-block',
+                          background: t.status === 'published' ? '#d4edda' : '#fff3cd',
+                          color: t.status === 'published' ? '#155724' : '#856404',
+                        }}>
+                          {t.status === 'published' ? 'Published' : 'Draft'}
+                        </span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <input type="checkbox" checked={enabledIds.has(t.id)}
