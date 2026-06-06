@@ -57,9 +57,9 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
   // Display exactly what this project has configured — nothing more, nothing less
   const displayTemplates: FormTemplate[] = projConfigs.map(c => c.template);
 
-  // Templates that exist but aren't yet connected to this project
+  // Only standard templates appear as "available to add" — custom templates are project-specific
   const connectedIds = new Set(projConfigs.map(c => c.templateId));
-  const availableTemplates = allTemplates.filter(t => !connectedIds.has(t.id));
+  const availableTemplates = allTemplates.filter(t => t.isStandard && !connectedIds.has(t.id));
 
   const toggleTemplate = (id: string) =>
     setEnabledIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
