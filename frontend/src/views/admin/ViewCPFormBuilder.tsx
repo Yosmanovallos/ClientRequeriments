@@ -365,7 +365,6 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
   const [name,    setName]    = useState(editTemplate?.name ?? '');
   const [slug,    setSlug]    = useState(editTemplate?.slug ?? '');
   const [desc,    setDesc]    = useState(editTemplate?.description ?? '');
-  const [status,  setStatus]  = useState(editTemplate?.status ?? 'draft');
   const [fields,  setFields]  = useState<FieldDraft[]>(
     editTemplate ? templateToFieldDrafts(editTemplate) : standardFieldDrafts(),
   );
@@ -422,32 +421,30 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
     return null;
   };
 
-  const handleSave = async (publishNow?: boolean) => {
+  const handleSave = async () => {
     setError('');
     const err = validate();
     if (err) { setError(err); return; }
 
     const fieldSchema = buildFieldSchema();
-    const newStatus = publishNow ? 'published' : status;
     setSaving(true);
 
     if (isEditing) {
       const { error: e } = await formTemplatesApi.update(editTemplate.id, {
         name:        name.trim(),
         description: desc.trim() || undefined,
-        status:      newStatus,
+        status:      'published',
         fieldSchema,
       });
       setSaving(false);
       if (e) { setError(e.message); return; }
-      if (publishNow) setStatus('published');
       setSuccess('Template updated! Redirecting…');
     } else {
       const { data: created, error: e } = await formTemplatesApi.create({
         name:        name.trim(),
         slug:        slug.trim(),
         description: desc.trim() || undefined,
-        status:      newStatus,
+        status:      'published',
         fieldSchema,
       });
       if (e) { setSaving(false); setError(e.message); return; }
@@ -611,22 +608,11 @@ export default function ViewCPFormBuilder({ projectId, editTemplate, onNavigate 
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <button className="btn-send" style={{ height: 42, padding: '0 24px' }}
-          onClick={() => handleSave()} disabled={saving}>
-          {saving ? (isEditing ? 'Saving…' : 'Creating…') : (isEditing ? 'Save draft' : 'Save as draft')}
+          onClick={handleSave} disabled={saving}>
+          {saving
+            ? (isEditing ? 'Saving…' : 'Creating…')
+            : (isEditing ? 'Save changes' : 'Create Template')}
         </button>
-        {status !== 'published' && (
-          <button
-            style={{ height: 42, padding: '0 20px', border: 'none', borderRadius: 6, background: '#155724', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
-            onClick={() => handleSave(true)} disabled={saving}
-          >
-            {saving ? 'Publishing…' : 'Publish'}
-          </button>
-        )}
-        {status === 'published' && (
-          <span style={{ fontSize: 12, color: '#155724', fontWeight: 600, padding: '0 8px' }}>
-            ✓ Published
-          </span>
-        )}
         <button className="btn-cancel" onClick={() => onNavigate('forms', projectId)}>Cancel</button>
       </div>
     </div>

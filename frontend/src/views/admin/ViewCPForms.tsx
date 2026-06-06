@@ -98,20 +98,20 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
     setTimeout(() => setSaveMsg(''), 2500);
   };
 
-  const refreshConfigs = async () => {
-    const { data } = await formTemplatesApi.listProjectConfigs(selectedProjId);
-    const configs = data?.data ?? [];
-    setProjConfigs(configs);
-    setEnabledIds(new Set(configs.filter(c => c.isEnabled).map(c => c.templateId)));
-  };
-
   const handleDelete = async (t: FormTemplate) => {
     if (!window.confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
     setDeletingId(t.id);
     try {
       const { error: err } = await formTemplatesApi.removeFromProject(selectedProjId, t.id);
       if (err) { setSaveMsg('Error deleting: ' + err.message); return; }
-      await refreshConfigs();
+      // Remove only this template from the project list (optimistic — avoids clearing all)
+      setProjConfigs(prev => prev.filter(c => c.templateId !== t.id));
+      setEnabledIds(prev => { const s = new Set(prev); s.delete(t.id); return s; });
+      // Custom templates are deleted from the DB entirely — remove from allTemplates too
+      // so they don't reappear in Available Templates
+      if (!t.isStandard) {
+        setAllTemplates(prev => prev.filter(x => x.id !== t.id));
+      }
     } catch (e) {
       setSaveMsg('Error deleting: ' + (e instanceof Error ? e.message : 'Unknown error'));
     } finally {
@@ -187,10 +187,10 @@ export default function ViewCPForms({ projectId: initialProjectId, onNavigate }:
                       <td style={{ textAlign: 'center' }}>
                         <span style={{
                           fontSize: 11, padding: '2px 10px', borderRadius: 10, fontWeight: 600, display: 'inline-block',
-                          background: t.status === 'published' ? '#d4edda' : '#fff3cd',
-                          color: t.status === 'published' ? '#155724' : '#856404',
+                          background: enabledIds.has(t.id) ? '#d4edda' : '#f8d7da',
+                          color: enabledIds.has(t.id) ? '#155724' : '#721c24',
                         }}>
-                          {t.status === 'published' ? 'Published' : 'Draft'}
+                          {enabledIds.has(t.id) ? 'Published' : 'Unpublished'}
                         </span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
