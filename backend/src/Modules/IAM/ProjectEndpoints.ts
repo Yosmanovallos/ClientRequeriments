@@ -22,6 +22,7 @@ const UpdateProjectSchema = z.object({
   description:    z.string().max(2000).nullable().optional(),
   iconUrl:        z.string().max(2_000_000).nullable().optional(),
   isActive:       z.boolean().optional(),
+  prefix:         z.string().max(16).nullable().optional(),
   adoProjectId:   z.string().max(64).nullable().optional(),
   adoProjectName: z.string().max(256).nullable().optional(),
 });

@@ -13,6 +13,7 @@ export interface Project {
   description:    string | null;
   iconUrl:        string | null;  // project logo — base64 data URL or external URL
   isActive:       boolean;
+  prefix:         string | null;  // request reference prefix, e.g. CFGMBR, CSNDBR, CBLGBR
   adoProjectId:   string | null;  // ADO project GUID; null for legacy local or non-ADO projects
   adoProjectName: string | null;  // denormalized ADO display name
   createdAt:      Date;
@@ -30,11 +31,12 @@ export interface CreateProjectCmd {
 }
 
 export interface UpdateProjectPatch {
-  name?:          string;
-  description?:   string | null;
-  iconUrl?:       string | null;
-  isActive?:      boolean;
-  adoProjectId?:  string | null;
+  name?:           string;
+  description?:    string | null;
+  iconUrl?:        string | null;
+  isActive?:       boolean;
+  prefix?:         string | null;
+  adoProjectId?:   string | null;
   adoProjectName?: string | null;
 }
 

@@ -228,16 +228,23 @@ function CreateModal({ onSave, onClose }: { onSave: () => void; onClose: () => v
 function EditModal({ project, onSave, onClose }: { project: AdminProject; onSave: () => void; onClose: () => void }) {
   const [name,    setName]    = useState(project.name);
   const [desc,    setDesc]    = useState(project.description ?? '');
+  const [prefix,  setPrefix]  = useState(project.prefix ?? '');
   const [iconUrl, setIconUrl] = useState<string | null>(project.iconUrl);
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Name is required.'); return; }
+    const trimmedPrefix = prefix.trim().toUpperCase();
+    if (trimmedPrefix && !/^[A-Z0-9]{2,16}$/.test(trimmedPrefix)) {
+      setError('Prefix must be 2–16 uppercase letters/digits (e.g. CFGMBR).');
+      return;
+    }
     setSaving(true); setError('');
     const { error: err } = await projectsApi.update(project.id, {
       name: name.trim(),
       description: desc.trim() || null,
+      prefix: trimmedPrefix || null,
       iconUrl,
     });
     setSaving(false);
@@ -260,6 +267,14 @@ function EditModal({ project, onSave, onClose }: { project: AdminProject; onSave
           <label className="field-label">Description</label>
           <textarea className="txt txt-area" value={desc} onChange={e => setDesc(e.target.value)}
             style={{ width: '100%', minHeight: 80 }} />
+        </div>
+        <div className="field" style={{ marginBottom: 14 }}>
+          <label className="field-label">Request prefix</label>
+          <input className="txt" value={prefix} onChange={e => setPrefix(e.target.value.toUpperCase())}
+            placeholder="e.g. CFGMBR" maxLength={16} style={{ fontFamily: 'monospace', textTransform: 'uppercase' }} />
+          <span style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+            Used for request IDs (e.g. CFGMBR-1). Leave blank to use REQ.
+          </span>
         </div>
         <div className="field" style={{ marginBottom: 4 }}>
           <label className="field-label">Project Logo</label>

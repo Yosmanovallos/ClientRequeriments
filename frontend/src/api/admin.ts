@@ -16,6 +16,7 @@ export interface AdminProject {
   slug:           string;
   description:    string | null;
   iconUrl:        string | null;
+  prefix:         string | null;
   memberCount:    number;
   requestCount:   number;
   formCount:      number;
@@ -78,7 +79,7 @@ export const projectsApi = {
   }) => api.post<AdminProject>('/projects', data),
   update:       (id: string, data: Partial<{
     name: string; description: string | null; iconUrl: string | null; isActive: boolean;
-    adoProjectId: string | null; adoProjectName: string | null;
+    prefix: string | null; adoProjectId: string | null; adoProjectName: string | null;
   }>) => api.patch<AdminProject>(`/projects/${id}`, data),
   members:      (id: string) => api.get<{ data: ProjectMember[]; count: number }>(`/projects/${id}/members`),
   addMember:    (id: string, userId: string) => api.post<void>(`/projects/${id}/members`, { userId }),

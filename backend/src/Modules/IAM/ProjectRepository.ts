@@ -39,6 +39,7 @@ export class InMemoryProjectRepository implements IProjectRepository {
       description:    cmd.description ?? null,
       iconUrl:        cmd.iconUrl ?? null,
       isActive:       true,
+      prefix:         null,
       adoProjectId:   cmd.adoProjectId ?? null,
       adoProjectName: cmd.adoProjectName ?? null,
       createdAt:      now,
@@ -242,7 +243,7 @@ export class PrismaProjectRepository implements IProjectRepository {
   private toDomain = (r: {
     id: string; clientId: string; name: string; slug: string;
     description: string | null; iconUrl?: string | null; isActive: boolean;
-    adoProjectId?: string | null; adoProjectName?: string | null;
+    prefix?: string | null; adoProjectId?: string | null; adoProjectName?: string | null;
     createdAt: Date; updatedAt: Date;
   }): Project => ({
     id:             r.id,
@@ -252,6 +253,7 @@ export class PrismaProjectRepository implements IProjectRepository {
     description:    r.description,
     iconUrl:        r.iconUrl ?? null,
     isActive:       r.isActive,
+    prefix:         r.prefix ?? null,
     adoProjectId:   r.adoProjectId ?? null,
     adoProjectName: r.adoProjectName ?? null,
     createdAt:      r.createdAt,
