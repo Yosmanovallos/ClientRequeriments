@@ -36,7 +36,11 @@ export default function ViewFormsList() {
         ]} />
 
         <div className="req-head">
-          <Monogram size={40} />
+          {activeProject?.iconUrl
+            ? <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', flex: 'none', background: '#f0f0f0' }}>
+                <img src={activeProject.iconUrl} alt={activeProject.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            : <Monogram size={40} />}
           <h1>{activeProject?.name ?? 'Project'}</h1>
         </div>
         <p className="req-sub">Welcome! Select a request type below to get started.</p>
