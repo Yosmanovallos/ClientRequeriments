@@ -190,15 +190,15 @@ export default function ViewRequestDetail({ requestId }: Props) {
 
         {/* Header — full width above two-column area */}
         <div className="detail-header">
-          <h1>{req.reference}</h1>
+          <h1>
+            {req.adoWorkItemUrl
+              ? <a href={req.adoWorkItemUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{req.reference} ↗</a>
+              : req.reference}
+          </h1>
           <p className="detail-subtitle">{req.title}</p>
           <div className="detail-meta">
             <span className={`badge badge-${color}`}>{req.status}</span>
             <span>Submitted {fmtDate(req.createdAt)}</span>
-            {req.adoWorkItemId && req.adoWorkItemUrl
-              ? <a href={req.adoWorkItemUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>· ADO #{req.adoWorkItemId} ↗</a>
-              : req.adoWorkItemId && <span>· ADO #{req.adoWorkItemId}</span>
-            }
           </div>
         </div>
 
