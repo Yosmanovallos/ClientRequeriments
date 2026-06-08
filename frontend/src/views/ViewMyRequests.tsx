@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { requestsApi, type RequestSummary } from '../api/requests';
-import { fmtDate, STATUS_COLORS, TYPE_LABEL } from '../lib/utils';
+import { fmtDate, fmtDueDate, STATUS_COLORS, TYPE_LABEL } from '../lib/utils';
 import TopNav from '../components/layout/TopNav';
 import PortalBanner from '../components/layout/PortalBanner';
 import FormCrumbs from '../components/layout/FormCrumbs';
@@ -45,7 +45,7 @@ export default function ViewMyRequests() {
     r.reference.toLowerCase().includes(query.toLowerCase())
   );
 
-  const cols = ['Type', 'Reference', 'Summary', 'Status', 'Service project', 'Organization', 'Created', 'Updated', 'Due', 'Priority'];
+  const cols = ['Type', 'Reference', 'Summary', 'Status', 'Request type', 'Organization', 'Reporter', 'Created', 'Updated', 'Due', 'Priority'];
 
   return (
     <div className="view view-reqlist">
@@ -90,9 +90,10 @@ export default function ViewMyRequests() {
                           <td><span className={`badge badge-${color}`}>{r.status}</span></td>
                           <td className="t-proj">{TYPE_LABEL[r.requestType] ?? r.requestType}</td>
                           <td className="t-proj">{r.organizationName ?? '—'}</td>
+                          <td className="t-proj">{r.createdBy ?? '—'}</td>
                           <td className="t-date">{fmtDate(r.createdAt)}</td>
                           <td className="t-date">{fmtDate(r.updatedAt)}</td>
-                          <td className="t-date">{r.dueDate ? fmtDate(r.dueDate) : '—'}</td>
+                          <td className="t-date">{fmtDueDate(r.dueDate)}</td>
                           <td>{r.priority}</td>
                         </tr>
                       );

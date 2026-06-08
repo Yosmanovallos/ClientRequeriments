@@ -148,7 +148,7 @@ export default function ViewRequestDetail({ requestId }: Props) {
       <div className="detailcol">
         <FormCrumbs trail={[
           { label: 'Provana Customer Portal', to: 'portal' },
-          { label: 'BLG - Power BI Requests', to: 'requests' },
+          { label: 'Requests', to: 'requests' },
           { label: '…' },
         ]} />
         <p style={{ color: 'var(--muted)', marginTop: 24 }}>Request not found or access denied.</p>
@@ -184,7 +184,7 @@ export default function ViewRequestDetail({ requestId }: Props) {
         {/* Breadcrumbs */}
         <FormCrumbs trail={[
           { label: 'Provana Customer Portal', to: 'portal' },
-          { label: 'BLG - Power BI Requests', to: 'requests' },
+          { label: `${req.reference.split('-')[0]} - ${req.organizationName ?? 'Project'} Requests`, to: 'requests' },
           { label: req.reference },
         ]} />
 

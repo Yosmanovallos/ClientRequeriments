@@ -6,6 +6,12 @@ export function fmtCommentDate(iso: string | Date): string {
   }).format(new Date(iso));
 }
 
+/** Format a due date as an absolute label (e.g., "Jun 24, 2026"). */
+export function fmtDueDate(iso: string | Date | null | undefined): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 /** Format an ISO date string as a relative human-readable label. */
 export function fmtDate(iso: string | Date | null | undefined): string {
   if (!iso) return '';
