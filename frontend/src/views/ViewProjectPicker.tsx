@@ -1,35 +1,32 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import TopNav from '../components/layout/TopNav';
 import HeroNetwork from '../components/brand/HeroNetwork';
 import Monogram from '../components/brand/Monogram';
 
 export default function ViewProjectPicker() {
-  const { user, setActiveProject, go } = useApp();
-  const projects = user?.projects ?? [];
-  const isAdmin  = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const { user } = useApp();
+  const navigate  = useNavigate();
+  const projects  = user?.projects ?? [];
+  const isAdmin   = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
-  const roleHome = (): import('../context/AppContext').View => {
+  const roleHome = (slug: string) => {
     const role = user?.role ?? '';
-    if (role === 'CLIENT') return 'requests';
-    if (role === 'AGENT')  return 'myrequests';
-    return 'portal';
+    if (role === 'CLIENT') return `/portal/${slug}`;
+    if (role === 'AGENT')  return `/portal/${slug}/requests`;
+    return '/';
   };
 
   useEffect(() => {
-    // Auto-select if only one project; admins with no projects skip straight to portal
     if (projects.length === 1) {
-      setActiveProject(projects[0]);
-      go(roleHome());
+      navigate(roleHome(projects[0].slug), { replace: true });
     } else if (projects.length === 0 && isAdmin) {
-      go('portal');
+      navigate('/', { replace: true });
     }
   }, []);
 
-  const pick = (idx: number) => {
-    setActiveProject(projects[idx]);
-    go(roleHome());
-  };
+  const pick = (idx: number) => navigate(roleHome(projects[idx].slug));
 
   return (
     <div className="view view-portal">
@@ -58,10 +55,10 @@ export default function ViewProjectPicker() {
             {isAdmin && (
               <div style={{ display: 'flex', gap: 12 }}>
                 <button className="btn-send" style={{ height: 40, padding: '0 20px' }}
-                  onClick={() => go('admin')}>
+                  onClick={() => navigate('/admin')}>
                   Go to Control Panel
                 </button>
-                <button className="btn-cancel" onClick={() => go('portal')}>
+                <button className="btn-cancel" onClick={() => navigate('/')}>
                   Go to Portal
                 </button>
               </div>
@@ -95,7 +92,7 @@ export default function ViewProjectPicker() {
             </div>
             {isAdmin && (
               <div style={{ marginTop: 28 }}>
-                <button className="btn-cancel" style={{ fontSize: 13 }} onClick={() => go('admin')}>
+                <button className="btn-cancel" style={{ fontSize: 13 }} onClick={() => navigate('/admin')}>
                   Skip — go to Control Panel →
                 </button>
               </div>

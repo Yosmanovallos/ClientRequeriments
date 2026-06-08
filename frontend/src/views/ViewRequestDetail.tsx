@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { requestsApi, type RequestDetail, type Comment, type StatusHistoryEntry } from '../api/requests';
 import { attachmentsApi, type AttachmentView } from '../api/attachments';
 import { formTemplatesApi, type FormTemplate } from '../api/formTemplates';
@@ -11,8 +12,6 @@ import TopNav from '../components/layout/TopNav';
 import PortalBanner from '../components/layout/PortalBanner';
 import FormCrumbs from '../components/layout/FormCrumbs';
 import LoadingSpinner from '../components/LoadingSpinner';
-
-interface Props { requestId: string; }
 
 function fmtDisplayDate(val: string): string {
   const d = new Date(val);
@@ -59,8 +58,10 @@ function buildGroups(history: StatusHistoryEntry[], comments: Comment[]): Timeli
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ViewRequestDetail({ requestId }: Props) {
+export default function ViewRequestDetail() {
+  const { slug, reference } = useParams<{ slug?: string; reference: string }>();
   const { user } = useApp();
+  const navigate = useNavigate();
   const [req,         setReq]         = useState<RequestDetail | null>(null);
   const [comments,    setComments]    = useState<Comment[]>([]);
   const [attachments, setAttachments] = useState<AttachmentView[]>([]);
@@ -81,37 +82,37 @@ export default function ViewRequestDetail({ requestId }: Props) {
   }, [commentOpen]);
 
   useEffect(() => {
-    if (!requestId) { setLoading(false); return; }
-    Promise.all([
-      requestsApi.getDetail(requestId),
-      requestsApi.listComments(requestId),
-      attachmentsApi.list(requestId),
-    ]).then(([{ data: r }, { data: c }, { data: a }]) => {
+    if (!reference) { setLoading(false); return; }
+    requestsApi.getByReference(reference).then(({ data: r }) => {
       setReq(r ?? null);
-      setComments((c as { data: Comment[] } | null)?.data ?? []);
-      setAttachments(a ?? []);
       setLoading(false);
-      if (r?.templateSnapshot) {
-        // Use the frozen snapshot captured at submission time
+      if (!r) return;
+      Promise.all([
+        requestsApi.listComments(r.id),
+        attachmentsApi.list(r.id),
+      ]).then(([{ data: c }, { data: a }]) => {
+        setComments((c as { data: Comment[] } | null)?.data ?? []);
+        setAttachments(a ?? []);
+      });
+      if (r.templateSnapshot) {
         try {
           const fieldSchema = JSON.parse(r.templateSnapshot);
           setTemplate({ id: '', clientId: '', name: '', slug: r.requestType, description: null, isStandard: false, status: 'published', fieldSchema });
         } catch {}
-      } else if (r?.projectId) {
-        // Legacy requests: fall back to fetching the current template
-        const slug = r.requestType.replace(/_/g, '-');
+      } else if (r.projectId) {
+        const tSlug = r.requestType.replace(/_/g, '-');
         formTemplatesApi.listByProject(r.projectId)
-          .then(({ data }) => setTemplate(data?.data.find(t => t.slug === slug) ?? null))
+          .then(({ data }) => setTemplate(data?.data.find(t => t.slug === tSlug) ?? null))
           .catch(() => {});
       }
     });
-  }, [requestId]);
+  }, [reference]);
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!req || editorRef.current?.isEmpty()) return;
     setSending(true); setCmtError('');
-    const { data, error } = await requestsApi.addComment(requestId, commentHtml);
+    const { data, error } = await requestsApi.addComment(req.id, commentHtml);
     setSending(false);
     if (error) { setCmtError(error.message); return; }
     if (data) setComments(prev => [...prev, data as Comment]);
@@ -147,8 +148,8 @@ export default function ViewRequestDetail({ requestId }: Props) {
       <TopNav /><PortalBanner />
       <div className="detailcol">
         <FormCrumbs trail={[
-          { label: 'Provana Customer Portal', to: 'portal' },
-          { label: 'Requests', to: 'requests' },
+          { label: 'Provana Customer Portal', to: '/' },
+          { label: 'Requests', to: slug ? `/portal/${slug}/requests` : '/requests' },
           { label: '…' },
         ]} />
         <p style={{ color: 'var(--muted)', marginTop: 24 }}>Request not found or access denied.</p>
@@ -183,8 +184,8 @@ export default function ViewRequestDetail({ requestId }: Props) {
 
         {/* Breadcrumbs */}
         <FormCrumbs trail={[
-          { label: 'Provana Customer Portal', to: 'portal' },
-          { label: `${req.reference.split('-')[0]} - ${req.organizationName ?? 'Project'} Requests`, to: 'requests' },
+          { label: 'Provana Customer Portal', to: '/' },
+          { label: `${req.reference.split('-')[0]} - ${req.organizationName ?? 'Project'} Requests`, to: slug ? `/portal/${slug}/requests` : '/requests' },
           { label: req.reference },
         ]} />
 
@@ -392,7 +393,7 @@ export default function ViewRequestDetail({ requestId }: Props) {
                   <div className="cmt-open-wrap">
                     <CommentEditor
                       ref={editorRef}
-                      requestId={requestId}
+                      requestId={req.id}
                       onChange={setCommentHtml}
                     />
                   </div>

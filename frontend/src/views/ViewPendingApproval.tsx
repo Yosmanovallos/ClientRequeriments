@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { auth } from '../auth';
 import ProvanaLogo from '../components/brand/ProvanaLogo';
 
 export default function ViewPendingApproval() {
-  const { logout, setUser, go } = useApp();
+  const { logout, setUser } = useApp();
+  const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
   const [message,  setMessage]  = useState('');
 
@@ -13,13 +15,15 @@ export default function ViewPendingApproval() {
     setMessage('');
     const session = await auth.getSession();
     setChecking(false);
-    if (!session) { await logout(); return; }
+    if (!session) { await logout(); navigate('/login'); return; }
     if (session.role !== null) {
       setUser(session);
-      if (session.projects.length !== 1) { go('project-picker'); return; }
-      // Single project — activate it and route to role-appropriate home
+      if (session.projects.length !== 1) { navigate('/pick'); return; }
+      const p    = session.projects[0];
       const role = session.role;
-      go(role === 'CLIENT' ? 'requests' : role === 'AGENT' ? 'myrequests' : 'portal');
+      if (role === 'CLIENT') navigate(`/portal/${p.slug}`);
+      else if (role === 'AGENT') navigate(`/portal/${p.slug}/requests`);
+      else navigate('/');
     } else {
       setMessage('Still pending — check back later.');
     }
@@ -51,7 +55,7 @@ export default function ViewPendingApproval() {
           {checking ? 'Checking…' : 'Check again'}
         </button>
 
-        <button onClick={logout}
+        <button onClick={async () => { await logout(); navigate('/login'); }}
           style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 13, cursor: 'pointer' }}>
           Sign out
         </button>

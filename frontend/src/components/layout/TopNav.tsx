@@ -1,15 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useApp, type View } from '../../context/AppContext';
+import { useNavigate, useMatch } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import ProvanaLogo from '../brand/ProvanaLogo';
 import Avatar from '../brand/Avatar';
 import { IconSearch } from '../Icons';
 
 export default function TopNav() {
-  const { go, user, logout } = useApp();
+  const { user, logout } = useApp();
+  const navigate = useNavigate();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdmin      = user?.role === 'ADMIN' || isSuperAdmin;
   const isAgent      = user?.role === 'AGENT';
   const isClient     = user?.role === 'CLIENT';
+
+  // Detect the current project slug if we're inside a /portal/:slug/* route
+  const portalMatch = useMatch('/portal/:slug/*');
+  const currentSlug = portalMatch?.params.slug;
 
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -22,7 +28,16 @@ export default function TopNav() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const nav = (v: View) => { setOpen(false); go(v); };
+  const nav = (path: string) => { setOpen(false); navigate(path); };
+
+  // "My Requests" / "All Project Requests" link target
+  const requestsPath = () => {
+    if (isAdmin || isSuperAdmin) return '/requests';
+    if (currentSlug) return `/portal/${currentSlug}/requests`;
+    // CLIENT with no active project — go home to pick one
+    const first = user?.projects[0];
+    return first ? `/portal/${first.slug}/requests` : '/';
+  };
 
   const initials = (user?.displayName ?? user?.email ?? 'YO')
     .split(/\s+/).filter(Boolean).slice(0, 2)
@@ -30,18 +45,17 @@ export default function TopNav() {
 
   return (
     <header className="topnav">
-      <button className="logo-btn" onClick={() => go('portal')} title="Provana Customer Portal">
+      <button className="logo-btn" onClick={() => navigate('/')} title="Provana Customer Portal">
         <ProvanaLogo height={30} />
       </button>
 
       <div style={{ flex: 1 }} />
 
-      {/* CLIENT sees their own requests; AGENT/ADMIN see all project requests */}
       {isClient && (
-        <button className="topnav-action" onClick={() => go('myrequests')}>My Requests</button>
+        <button className="topnav-action" onClick={() => navigate(requestsPath())}>My Requests</button>
       )}
       {(isAgent || isAdmin) && (
-        <button className="topnav-action" onClick={() => go('myrequests')}>All Project Requests</button>
+        <button className="topnav-action" onClick={() => navigate(requestsPath())}>All Project Requests</button>
       )}
 
       <button className="nav-search-btn" title="Search"><IconSearch size={20} /></button>
@@ -66,20 +80,20 @@ export default function TopNav() {
             </div>
             <div className="pm-div" />
             {isClient && (
-              <button className="pm-item" onClick={() => nav('myrequests')}>My Requests</button>
+              <button className="pm-item" onClick={() => nav(requestsPath())}>My Requests</button>
             )}
             {(isAgent || isAdmin) && (
-              <button className="pm-item" onClick={() => nav('myrequests')}>All Project Requests</button>
+              <button className="pm-item" onClick={() => nav(requestsPath())}>All Project Requests</button>
             )}
-            <button className="pm-item" onClick={() => nav('profile')}>My Profile</button>
+            <button className="pm-item" onClick={() => nav('/profile')}>My Profile</button>
             {isAdmin && (
-              <button className="pm-item" onClick={() => nav('admin')}>
+              <button className="pm-item" onClick={() => nav('/admin')}>
                 {isSuperAdmin ? '⚙ Control Panel' : '⚙ Configure Forms'}
               </button>
             )}
-            <button className="pm-item" onClick={() => nav('portal')}>Home</button>
+            <button className="pm-item" onClick={() => nav('/')}>Home</button>
             <div className="pm-div" />
-            <button className="pm-item" onClick={async () => { setOpen(false); await logout(); }}>Sign out</button>
+            <button className="pm-item" onClick={async () => { setOpen(false); await logout(); navigate('/login'); }}>Sign out</button>
           </div>
         )}
       </div>

@@ -1,9 +1,9 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 
-// Views — import once here; no window globals needed (proper ES modules)
 import ViewPortal          from './views/ViewPortal';
 import ViewFormsList       from './views/ViewFormsList';
 import ViewDynamicForm     from './views/ViewDynamicForm';
@@ -16,34 +16,23 @@ import ViewDeactivated     from './views/ViewDeactivated';
 import ViewProjectPicker   from './views/ViewProjectPicker';
 import ViewControlPanel    from './views/admin/ViewControlPanel';
 
-function Router() {
-  const { user, authReady, view, detailId, activeProject, selectedTemplate } = useApp();
+function AuthGuard() {
+  const { user, authReady } = useApp();
+  const location = useLocation();
 
   if (!authReady) {
-    return <div className="view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><LoadingSpinner /></div>;
+    return (
+      <div className="view" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <LoadingSpinner />
+      </div>
+    );
   }
 
-  if (!user) return <ViewLogin />;
-  if (!user.isActive) return <ViewDeactivated />;
-  if (user.role === null) return <ViewPendingApproval />;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (!user.isActive) return <Navigate to="/deactivated" replace />;
+  if (user.role === null) return <Navigate to="/pending" replace />;
 
-  // Project-scoped views that require an active project: fall back to portal so the user picks one
-  if (!activeProject && (view === 'requests' || view === 'dynamic-form')) {
-    return <ViewPortal />;
-  }
-
-  switch (view) {
-    case 'requests':     return <ViewFormsList />;
-    case 'dynamic-form': return selectedTemplate
-      ? <ViewDynamicForm template={selectedTemplate} />
-      : <ViewFormsList />;
-    case 'myrequests':       return <ViewMyRequests />;
-    case 'profile':          return <ViewProfile />;
-    case 'detail':           return <ViewRequestDetail requestId={detailId ?? ''} />;
-    case 'project-picker':   return <ViewProjectPicker />;
-    case 'admin':            return <ViewControlPanel />;
-    default:                 return <ViewPortal />;
-  }
+  return <Outlet />;
 }
 
 export default function App() {
@@ -51,7 +40,29 @@ export default function App() {
     <ErrorBoundary>
       <div className="scroll">
         <AppProvider>
-          <Router />
+          <BrowserRouter>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login"       element={<ViewLogin />} />
+              <Route path="/pending"     element={<ViewPendingApproval />} />
+              <Route path="/deactivated" element={<ViewDeactivated />} />
+
+              {/* Protected routes */}
+              <Route element={<AuthGuard />}>
+                <Route path="/"                                    element={<ViewPortal />} />
+                <Route path="/pick"                                element={<ViewProjectPicker />} />
+                <Route path="/profile"                             element={<ViewProfile />} />
+                <Route path="/admin"                               element={<ViewControlPanel />} />
+                <Route path="/requests"                            element={<ViewMyRequests />} />
+                <Route path="/requests/:reference"                 element={<ViewRequestDetail />} />
+                <Route path="/portal/:slug"                        element={<ViewFormsList />} />
+                <Route path="/portal/:slug/new/:templateSlug"      element={<ViewDynamicForm />} />
+                <Route path="/portal/:slug/requests"               element={<ViewMyRequests />} />
+                <Route path="/portal/:slug/requests/:reference"    element={<ViewRequestDetail />} />
+                <Route path="*"                                    element={<Navigate to="/" replace />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
         </AppProvider>
       </div>
     </ErrorBoundary>

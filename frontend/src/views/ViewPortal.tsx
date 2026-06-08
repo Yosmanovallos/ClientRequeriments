@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import type { ProjectSummary } from '../auth';
 import TopNav from '../components/layout/TopNav';
@@ -42,18 +43,13 @@ function AllRequestsIcon() {
 }
 
 export default function ViewPortal() {
-  const { go, user, setActiveProject } = useApp();
+  const { user } = useApp();
+  const navigate  = useNavigate();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdmin      = user?.role === 'ADMIN';
   const projects     = user?.projects ?? [];
 
-  // Returning to the portal resets project context so requests show unfiltered
-  useEffect(() => { setActiveProject(null); }, []);
-
-  const openProject = (p: ProjectSummary) => {
-    setActiveProject(p);
-    go('requests');
-  };
+  const openProject = (p: ProjectSummary) => navigate(`/portal/${p.slug}`);
 
   return (
     <div className="view view-portal">
@@ -74,12 +70,11 @@ export default function ViewPortal() {
       </section>
 
       <main className="portal-body">
-        {/* Admin quick actions */}
         {(isSuperAdmin || isAdmin) && (
           <>
             <h2 className="section-title">Quick actions</h2>
             <div className="portals-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 36 }}>
-              <button className="portal-card is-live" onClick={() => go('admin')}>
+              <button className="portal-card is-live" onClick={() => navigate('/admin')}>
                 <div className="portal-icon"><CPanelIcon /></div>
                 <div className="portal-text">
                   <h3>{isSuperAdmin ? 'Control Panel' : 'Configure Forms'}</h3>
@@ -87,7 +82,7 @@ export default function ViewPortal() {
                 </div>
               </button>
               {isSuperAdmin && (
-                <button className="portal-card is-live" onClick={() => go('myrequests')}>
+                <button className="portal-card is-live" onClick={() => navigate('/requests')}>
                   <div className="portal-icon"><AllRequestsIcon /></div>
                   <div className="portal-text">
                     <h3>All Requests</h3>
@@ -99,7 +94,6 @@ export default function ViewPortal() {
           </>
         )}
 
-        {/* Projects grid — all roles */}
         <h2 className="section-title">
           {isSuperAdmin ? 'All Projects' : 'Your Projects'}
         </h2>

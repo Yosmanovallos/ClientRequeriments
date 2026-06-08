@@ -10,11 +10,15 @@ const ALLOWED_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain',
   'application/zip',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
 ]);
 
 const ALLOWED_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp',
   '.pdf', '.docx', '.xlsx', '.txt', '.zip',
+  '.mp4', '.mov', '.webm',
 ]);
 
 /**
