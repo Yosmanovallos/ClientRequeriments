@@ -117,7 +117,7 @@ export class PrismaOrganizationRepository implements IOrganizationRepository {
 
   async listByProject(projectId: string): Promise<Organization[]> {
     const rows = await this.prisma.organization.findMany({
-      where:   { projectId },
+      where:   { projectId, isActive: true },
       orderBy: { name: 'asc' },
       include: { _count: { select: { members: true } } },
     });

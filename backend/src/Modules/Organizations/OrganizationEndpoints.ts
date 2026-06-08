@@ -61,15 +61,7 @@ export function registerOrganizationEndpoints(
     if (!project) return reply.status(404).send({ title: 'NOT_FOUND', status: 404, detail: 'Project not found' });
     requireProjectAccess(req.user, project.id, project.clientId);
 
-    const role = req.user.role as Role;
-    let orgs = await svc.listByProject(project.id);
-
-    // AGENT and CLIENT see only orgs they belong to
-    if (role === 'AGENT' || role === 'CLIENT') {
-      const userOrgIds = new Set(req.user.organizationIds ?? []);
-      orgs = orgs.filter(o => userOrgIds.has(o.id));
-    }
-
+    const orgs = await svc.listByProject(project.id);
     return reply.send({ data: orgs, count: orgs.length });
   });
 
