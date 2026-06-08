@@ -71,6 +71,9 @@ export const requestsApi = {
   getDetail(id: string) {
     return api.get<RequestDetail>(`/requests/${id}`);
   },
+  getByReference(reference: string) {
+    return api.get<RequestDetail>(`/requests/ref/${encodeURIComponent(reference)}`);
+  },
   addComment(requestId: string, body: string) {
     return api.post<Comment>(`/requests/${requestId}/comments`, { body });
   },

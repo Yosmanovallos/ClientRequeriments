@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import TopNav from '../../components/layout/TopNav';
 import type { FormTemplate } from '../../api/formTemplates';
@@ -31,10 +32,11 @@ interface Props {
 }
 
 export default function ViewControlPanel({ initialSection }: Props) {
-  const { go, user } = useApp();
+  const { user } = useApp();
+  const navigate  = useNavigate();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdmin      = isSuperAdmin || user?.role === 'ADMIN';
-  if (!isAdmin) { go('portal'); return null; }
+  if (!isAdmin) { navigate('/', { replace: true }); return null; }
 
   const defaultSection: CPSection = isSuperAdmin ? (initialSection ?? 'overview') : 'forms';
   const [section,           setSection]           = useState<CPSection>(defaultSection);
@@ -60,7 +62,7 @@ export default function ViewControlPanel({ initialSection }: Props) {
         <nav className="cp-sidebar">
           <div className="cp-sidebar-header">
             <span className="cp-sidebar-title">{isSuperAdmin ? 'Control Panel' : 'Configure Forms'}</span>
-            <button className="cp-back" onClick={() => go('portal')}>← Portal</button>
+            <button className="cp-back" onClick={() => navigate('/')}>← Portal</button>
           </div>
           {nav.map(n => (
             <button

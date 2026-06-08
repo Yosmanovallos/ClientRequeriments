@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { requestsApi, type RequestSummary } from '../api/requests';
 import { fmtDate, fmtDueDate, STATUS_COLORS, TYPE_LABEL } from '../lib/utils';
@@ -17,28 +18,30 @@ const TYPE_ICON: Record<string, React.ComponentType<{ size?: number }>> = {
 };
 
 export default function ViewMyRequests() {
-  const { go, user, activeProject } = useApp();
+  const { slug } = useParams<{ slug?: string }>();
+  const { user } = useApp();
+  const navigate  = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const project   = slug ? (user?.projects.find(p => p.slug === slug) ?? null) : null;
+  const isClient  = user?.role === 'CLIENT';
+  const pageTitle = isClient ? 'My Requests' : 'All Project Requests';
+
   const [rows,    setRows]    = useState<RequestSummary[]>([]);
   const [query,   setQuery]   = useState('');
   const [loading, setLoading] = useState(true);
 
-  const isClient = user?.role === 'CLIENT';
-  const pageTitle = isClient ? 'My Requests' : 'All Project Requests';
-
   useEffect(() => {
-    // Build filters based on role:
-    // CLIENT    → backend automatically scopes to createdBy=me; send projectId if selected
-    // AGENT     → all requests in the active project only (strict project scope enforced by backend)
-    // ADMIN     → all requests in their tenant; filter by project if one is active
-    // SUPER_ADMIN → all requests; filter by project if one is active
-    const filters: { projectId?: string } = {};
-    if (activeProject) filters.projectId = activeProject.id;
+    const filters: { projectId?: string; status?: string } = {};
+    if (project) filters.projectId = project.id;
+    const statusParam = searchParams.get('status');
+    if (statusParam) filters.status = statusParam;
 
     requestsApi.list(filters).then(({ data }) => {
       setRows((data as { data: RequestSummary[] } | null)?.data ?? []);
       setLoading(false);
     });
-  }, [activeProject?.id]);
+  }, [project?.id, searchParams.get('status')]);
 
   const filtered = rows.filter(r =>
     r.title.toLowerCase().includes(query.toLowerCase()) ||
@@ -47,12 +50,28 @@ export default function ViewMyRequests() {
 
   const cols = ['Type', 'Reference', 'Summary', 'Status', 'Request type', 'Organization', 'Reporter', 'Created', 'Updated', 'Due', 'Priority'];
 
+  // Navigate to detail: prefer project-scoped URL, fall back to /requests/:reference
+  const openDetail = (r: RequestSummary) => {
+    if (slug) {
+      navigate(`/portal/${slug}/requests/${r.reference}`);
+    } else {
+      // Global list — find the project slug from user's projects
+      const proj = user?.projects.find(p => p.id === r.projectId);
+      if (proj) navigate(`/portal/${proj.slug}/requests/${r.reference}`);
+      else navigate(`/requests/${r.reference}`);
+    }
+  };
+
+  const crumbTrail = slug && project
+    ? [{ label: 'Provana Customer Portal', to: '/' }, { label: project.name, to: `/portal/${slug}` }]
+    : [{ label: 'Provana Customer Portal', to: '/' }];
+
   return (
     <div className="view view-reqlist">
       <TopNav />
       <PortalBanner />
       <div className="listcol">
-        <FormCrumbs trail={[{ label: 'Provana Customer Portal', to: 'portal' }]} />
+        <FormCrumbs trail={crumbTrail} />
 
         <div className="list-head">
           <h1 className="account-title" style={{ margin: 0 }}>{pageTitle}</h1>
@@ -80,10 +99,10 @@ export default function ViewMyRequests() {
                 : filtered.length === 0
                   ? <tr><td colSpan={cols.length} className="t-empty">No requests match your search.</td></tr>
                   : filtered.map(r => {
-                      const Icon = TYPE_ICON[r.requestType] ?? IconLaptop;
+                      const Icon  = TYPE_ICON[r.requestType] ?? IconLaptop;
                       const color = STATUS_COLORS[r.status] ?? 'grey';
                       return (
-                        <tr key={r.id} onClick={() => go('detail', { id: r.id })}>
+                        <tr key={r.id} onClick={() => openDetail(r)}>
                           <td className="t-icon"><span><Icon size={22} /></span></td>
                           <td className="t-ref">{r.reference}</td>
                           <td className="t-sum">{r.title}</td>

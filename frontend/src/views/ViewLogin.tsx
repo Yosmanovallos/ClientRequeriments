@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { auth } from '../auth';
 import ProvanaLogo from '../components/brand/ProvanaLogo';
@@ -36,7 +37,10 @@ function validatePassword(v: string): string | null {
 }
 
 export default function ViewLogin() {
-  const { go, setUser } = useApp();
+  const { setUser } = useApp();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/';
 
   const [mode,        setMode]        = useState<AuthMode>('login');
   const [email,       setEmail]       = useState('');
@@ -70,7 +74,7 @@ export default function ViewLogin() {
     const { session, error: err } = await auth.signIn(email, password);
     setLoading(false);
     if (err) { setError(err); return; }
-    if (session) { setUser(session); go('portal'); }
+    if (session) { setUser(session); navigate(from, { replace: true }); }
   };
 
   // ── Register ───────────────────────────────────────────────────────────────

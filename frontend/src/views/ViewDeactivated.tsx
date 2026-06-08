@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { auth } from '../auth';
 import ProvanaLogo from '../components/brand/ProvanaLogo';
 
 export default function ViewDeactivated() {
-  const { logout, setUser, go } = useApp();
+  const { logout, setUser } = useApp();
+  const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
   const [message,  setMessage]  = useState('');
 
@@ -13,13 +15,16 @@ export default function ViewDeactivated() {
     setMessage('');
     const session = await auth.getSession();
     setChecking(false);
-    if (!session) { await logout(); return; }
+    if (!session) { await logout(); navigate('/login'); return; }
     if (session.isActive) {
       setUser(session);
-      if (session.role === null) { go('pending'); return; }
-      if (session.projects.length !== 1) { go('project-picker'); return; }
+      if (session.role === null) { navigate('/pending'); return; }
+      if (session.projects.length !== 1) { navigate('/pick'); return; }
+      const p    = session.projects[0];
       const role = session.role;
-      go(role === 'CLIENT' ? 'requests' : role === 'AGENT' ? 'myrequests' : 'portal');
+      if (role === 'CLIENT') navigate(`/portal/${p.slug}`);
+      else if (role === 'AGENT') navigate(`/portal/${p.slug}/requests`);
+      else navigate('/');
     } else {
       setMessage('Account is still deactivated.');
     }
@@ -49,7 +54,7 @@ export default function ViewDeactivated() {
           {checking ? 'Checking…' : 'Check again'}
         </button>
         <button
-          onClick={logout}
+          onClick={async () => { await logout(); navigate('/login'); }}
           style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 13, cursor: 'pointer' }}
         >
           Sign out

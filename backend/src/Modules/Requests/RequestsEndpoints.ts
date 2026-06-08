@@ -145,6 +145,35 @@ export function registerRequestsEndpoints(
     return reply.send({ data: rows, count: rows.length });
   });
 
+  // GET /requests/ref/:reference — look up a request by its human-readable reference (e.g. CBLGBR-1)
+  // Must be registered before /requests/:id so Fastify's static segment wins over the dynamic one.
+  app.get<{ Params: { reference: string } }>('/requests/ref/:reference', async (req, reply) => {
+    requirePermission(req.user, 'requests.read');
+
+    const found = await repo.findByReference(req.params.reference, req.user.clientId);
+    if (!found) throw Errors.notFound(`Request ${req.params.reference} not found`);
+
+    const detail  = await svc.getDetail(found.id, req.user.clientId);
+    const history = await svc.getHistory(found.id, req.user.clientId);
+
+    if (req.user.role === 'AGENT' && detail.projectId) {
+      if (!req.user.projectIds?.includes(detail.projectId)) {
+        throw Errors.forbidden('No access to this project');
+      }
+    }
+
+    if (req.user.role === 'CLIENT') {
+      const isOwner = detail.createdBy && detail.createdBy === req.user.email;
+      const inOrg   = detail.organizationId && (req.user.organizationIds ?? []).includes(detail.organizationId);
+      if (!isOwner && !inOrg) throw Errors.forbidden('No access to this request');
+      if (detail.projectId && !req.user.projectIds?.includes(detail.projectId)) {
+        throw Errors.forbidden('No access to this project');
+      }
+    }
+
+    return reply.send({ ...detail, history });
+  });
+
   // GET /requests/:id — get a single request with history
   app.get<{ Params: { id: string } }>('/requests/:id', async (req, reply) => {
     requirePermission(req.user, 'requests.read');

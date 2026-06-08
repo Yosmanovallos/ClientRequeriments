@@ -14,6 +14,8 @@ export interface IRequestsRepository {
   create(cmd: CreateRequestCmd & { id: string; reference: string }): Promise<Request>;
   findByIdempotencyKey(key: string): Promise<Request | null>;
   findById(id: string, clientId: string): Promise<Request | null>;
+  /** Look up a request by its human-readable reference (e.g. CBLGBR-1) within a tenant. */
+  findByReference(reference: string, clientId: string): Promise<Request | null>;
   /** Look up a request by its external ticket id (e.g. GitHub issue number). No clientId filter — webhooks aren't authenticated by tenant. */
   findByExternalRef(externalId: string): Promise<Request | null>;
   list(clientId: string, filters?: ListRequestsFilters): Promise<Request[]>;
@@ -83,6 +85,13 @@ export class InMemoryRequestsRepository implements IRequestsRepository {
   async findById(id: string, clientId: string): Promise<Request | null> {
     const r = this.requests.get(id);
     return r && r.clientId === clientId ? r : null;
+  }
+
+  async findByReference(reference: string, clientId: string): Promise<Request | null> {
+    for (const r of this.requests.values()) {
+      if (r.reference === reference && r.clientId === clientId) return r;
+    }
+    return null;
   }
 
   async findByExternalRef(externalId: string): Promise<Request | null> {

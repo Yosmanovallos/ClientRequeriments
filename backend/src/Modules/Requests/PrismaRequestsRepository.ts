@@ -66,6 +66,11 @@ export class PrismaRequestsRepository implements IRequestsRepository {
     return row ? this.toDomain(row) : null;
   }
 
+  async findByReference(reference: string, clientId: string): Promise<Request | null> {
+    const row = await this.prisma.request.findFirst({ where: { reference, clientId } });
+    return row ? this.toDomain(row) : null;
+  }
+
   async findByExternalRef(externalId: string): Promise<Request | null> {
     const row = await this.prisma.request.findFirst({ where: { adoWorkItemId: externalId } });
     return row ? this.toDomain(row) : null;

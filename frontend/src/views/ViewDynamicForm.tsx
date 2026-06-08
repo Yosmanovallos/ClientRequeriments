@@ -1,50 +1,53 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { requestsApi } from '../api/requests';
 import { attachmentsApi } from '../api/attachments';
 import { orgsApi, type Organization } from '../api/admin';
-import type { FormTemplate } from '../api/formTemplates';
+import { formTemplatesApi, type FormTemplate } from '../api/formTemplates';
 import { evaluateConditions } from '../lib/conditionEngine';
 import DynamicField from '../components/DynamicField';
 import TopNav from '../components/layout/TopNav';
 import PortalBanner from '../components/layout/PortalBanner';
 import FormCrumbs from '../components/layout/FormCrumbs';
 import Monogram from '../components/brand/Monogram';
+import LoadingSpinner from '../components/LoadingSpinner';
 
-interface Props {
-  template: FormTemplate;
-}
+export default function ViewDynamicForm() {
+  const { slug, templateSlug } = useParams<{ slug: string; templateSlug: string }>();
+  const { user } = useApp();
+  const navigate  = useNavigate();
 
-export default function ViewDynamicForm({ template }: Props) {
-  const { go, activeProject, user } = useApp();
+  const project = user?.projects.find(p => p.slug === slug) ?? null;
 
-  // Text/richtext/select/radio/checkbox/date values keyed by field name
+  const [template,     setTemplate]     = useState<FormTemplate | null>(null);
+  const [loadingTpl,   setLoadingTpl]   = useState(true);
   const [values,       setValues]       = useState<Record<string, string>>({});
-  // Pending file arrays keyed by attachment field name
   const [pendingFiles, setPendingFiles] = useState<Record<string, File[]>>({});
-
   const [submitting,   setSubmitting]   = useState(false);
   const [submitMsg,    setSubmitMsg]    = useState('');
-
-  // Organization picker
   const [orgs,           setOrgs]           = useState<Organization[]>([]);
   const [organizationId, setOrganizationId] = useState<string>('');
 
   useEffect(() => {
-    if (!activeProject) return;
-    orgsApi.list(activeProject.id).then(({ data }) => {
+    if (!project) return;
+    formTemplatesApi.listByProject(project.id).then(({ data }) => {
+      const found = (data?.data ?? []).find(t => t.slug === templateSlug) ?? null;
+      setTemplate(found);
+      setLoadingTpl(false);
+    });
+    orgsApi.list(project.id).then(({ data }) => {
       const list = data?.data ?? [];
       setOrgs(list);
       if (list.length === 1) setOrganizationId(list[0].id);
     });
-  }, [activeProject?.id]);
+  }, [project?.id, templateSlug]);
 
   const fields = useMemo(
-    () => [...template.fieldSchema].sort((a, b) => a.sortOrder - b.sortOrder),
-    [template.fieldSchema],
+    () => [...(template?.fieldSchema ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
+    [template?.fieldSchema],
   );
 
-  // Evaluate conditions on every form value change — drives visibility + required state
   const fieldStates = useMemo(
     () => evaluateConditions(fields, values),
     [fields, values],
@@ -58,17 +61,14 @@ export default function ViewDynamicForm({ template }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeProject) return;
+    if (!project || !template) return;
 
-    // Validate visible required fields (hidden fields are skipped)
     for (const f of fields) {
       const state = fieldStates.get(f.name) ?? { visible: true, required: f.required };
       if (!state.visible) continue;
-
       if (state.required && f.type === 'richtext') {
         const html = values[f.name] ?? '';
-        const stripped = html.replace(/<[^>]*>/g, '').trim();
-        if (!stripped) {
+        if (!html.replace(/<[^>]*>/g, '').trim()) {
           setSubmitMsg(`Error: "${f.label}" is required.`);
           return;
         }
@@ -86,15 +86,12 @@ export default function ViewDynamicForm({ template }: Props) {
     setSubmitting(true);
     setSubmitMsg('Submitting…');
 
-    const priority  = values['priority']  ?? 'Medium';
-    const dueDate   = values['dueDate']   ?? null;
-
+    const priority  = values['priority'] ?? 'Medium';
+    const dueDate   = values['dueDate']  ?? null;
     const requestType = template.slug;
-
     const firstTextField = fields.find(f => f.type === 'text');
     const title = (firstTextField ? values[firstTextField.name] : '') || template.name;
 
-    // Only include visible non-attachment fields in the payload
     const payloadValues = Object.fromEntries(
       Object.entries(values).filter(([k]) => {
         const fd = fields.find(f => f.name === k);
@@ -108,7 +105,7 @@ export default function ViewDynamicForm({ template }: Props) {
       title,
       priority,
       dueDate:        dueDate || null,
-      projectId:      activeProject.id,
+      projectId:      project.id,
       organizationId: organizationId || null,
       templateId:     template.id,
       payload:        payloadValues,
@@ -122,7 +119,6 @@ export default function ViewDynamicForm({ template }: Props) {
 
     const created = data as { id: string; reference: string };
 
-    // Upload any pending files
     const allFiles = Object.values(pendingFiles).flat();
     if (allFiles.length > 0) {
       const { succeeded, failed } = await attachmentsApi.uploadAll(
@@ -135,17 +131,28 @@ export default function ViewDynamicForm({ template }: Props) {
         setSubmitMsg(
           `Request ${created.reference} submitted. ${succeeded} file(s) uploaded, ${failed} failed.`,
         );
-        setTimeout(() => go('requests'), 3000);
+        setTimeout(() => navigate(`/portal/${slug}`), 3000);
         return;
       }
     }
 
     setSubmitting(false);
     setSubmitMsg(`Request ${created.reference} submitted successfully!`);
-    setTimeout(() => go('requests'), 2000);
+    setTimeout(() => navigate(`/portal/${slug}`), 2000);
   };
 
-  // "Raise this request on behalf of" — read-only current user chip
+  if (!project) return <Navigate to="/" replace />;
+  if (loadingTpl) {
+    return (
+      <div className="view view-form">
+        <TopNav />
+        <PortalBanner />
+        <div className="formcol"><LoadingSpinner label="Loading form…" /></div>
+      </div>
+    );
+  }
+  if (!template) return <Navigate to={`/portal/${slug}`} replace />;
+
   const displayName = user?.displayName ?? user?.email ?? 'You';
   const initials = displayName.split(/\s+/).filter(Boolean).slice(0, 2)
     .map((w: string) => w[0]?.toUpperCase() ?? '').join('') || 'Y';
@@ -156,18 +163,18 @@ export default function ViewDynamicForm({ template }: Props) {
       <PortalBanner />
       <div className="formcol">
         <FormCrumbs trail={[
-          { label: 'Provana Customer Portal', to: 'portal' },
-          { label: activeProject?.name ?? 'Project', to: 'requests' },
+          { label: 'Provana Customer Portal', to: '/' },
+          { label: project.name, to: `/portal/${slug}` },
           { label: template.name },
         ]} />
 
         <div className="req-head">
-          {activeProject?.iconUrl
+          {project.iconUrl
             ? <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', flex: 'none', background: '#f0f0f0' }}>
-                <img src={activeProject.iconUrl} alt={activeProject.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={project.iconUrl} alt={project.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             : <Monogram size={40} />}
-          <h1>{activeProject?.name ?? 'Request'}</h1>
+          <h1>{project.name}</h1>
         </div>
         {template.description && (
           <p className="req-sub">{template.description}</p>
@@ -183,7 +190,6 @@ export default function ViewDynamicForm({ template }: Props) {
           Required fields are marked with an asterisk <span className="req-star">*</span>
         </p>
 
-        {/* "Raise this request on behalf of" chip */}
         <div className="field">
           <label className="field-label">Raise this request on behalf of</label>
           <div className="behalf">
@@ -197,7 +203,6 @@ export default function ViewDynamicForm({ template }: Props) {
           </div>
         </div>
 
-        {/* Organization picker */}
         <div className="field">
           <label className="field-label">Share with organization</label>
           <select
@@ -236,7 +241,7 @@ export default function ViewDynamicForm({ template }: Props) {
             <button type="submit" className="btn-send" disabled={submitting}>
               {submitting ? 'Sending…' : 'Send'}
             </button>
-            <button type="button" className="btn-cancel" onClick={() => go('requests')}>
+            <button type="button" className="btn-cancel" onClick={() => navigate(`/portal/${slug}`)}>
               Cancel
             </button>
           </div>

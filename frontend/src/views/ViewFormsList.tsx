@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formTemplatesApi, type FormTemplate } from '../api/formTemplates';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -8,21 +9,28 @@ import FormCrumbs from '../components/layout/FormCrumbs';
 import Monogram from '../components/brand/Monogram';
 
 export default function ViewFormsList() {
-  const { go, activeProject, setSelectedTemplate } = useApp();
+  const { slug } = useParams<{ slug: string }>();
+  const { user } = useApp();
+  const navigate  = useNavigate();
+
+  const project = user?.projects.find(p => p.slug === slug) ?? null;
+
   const [forms,   setForms]   = useState<FormTemplate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!activeProject) return;
-    formTemplatesApi.listByProject(activeProject.id).then(({ data }) => {
+    if (!project) return;
+    formTemplatesApi.listByProject(project.id).then(({ data }) => {
       setForms(data?.data ?? []);
       setLoading(false);
     });
-  }, [activeProject?.id]);
+  }, [project?.id]);
+
+  // Unknown slug — redirect home
+  if (!project) return <Navigate to="/" replace />;
 
   const handleSelect = (template: FormTemplate) => {
-    setSelectedTemplate(template);
-    go('dynamic-form');
+    navigate(`/portal/${slug}/new/${template.slug}`);
   };
 
   return (
@@ -31,17 +39,17 @@ export default function ViewFormsList() {
       <PortalBanner />
       <div className="reqcol">
         <FormCrumbs trail={[
-          { label: 'Provana Customer Portal', to: 'portal' },
-          { label: activeProject?.name ?? 'Project' },
+          { label: 'Provana Customer Portal', to: '/' },
+          { label: project.name },
         ]} />
 
         <div className="req-head">
-          {activeProject?.iconUrl
+          {project.iconUrl
             ? <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', flex: 'none', background: '#f0f0f0' }}>
-                <img src={activeProject.iconUrl} alt={activeProject.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={project.iconUrl} alt={project.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             : <Monogram size={40} />}
-          <h1>{activeProject?.name ?? 'Project'}</h1>
+          <h1>{project.name}</h1>
         </div>
         <p className="req-sub">Welcome! Select a request type below to get started.</p>
         <p className="whats">What can we help you with?</p>
