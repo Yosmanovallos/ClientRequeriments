@@ -17,45 +17,53 @@ const TYPE_ICON: Record<string, React.ComponentType<{ size?: number }>> = {
   view_request: IconCode,
 };
 
+const CLOSED_STATUSES = new Set(['DONE', 'CANCELLED']);
+
 export default function ViewMyRequests() {
   const { slug } = useParams<{ slug?: string }>();
   const { user } = useApp();
-  const navigate  = useNavigate();
-  const [searchParams] = useSearchParams();
+  const navigate   = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const project   = slug ? (user?.projects.find(p => p.slug === slug) ?? null) : null;
   const isClient  = user?.role === 'CLIENT';
   const pageTitle = isClient ? 'My Requests' : 'All Project Requests';
+
+  // 'open' (default) hides DONE + CANCELLED; 'all' shows everything
+  const activeFilter = searchParams.get('filter') === 'all' ? 'all' : 'open';
+
+  const setFilter = (f: 'open' | 'all') => {
+    setSearchParams(f === 'open' ? {} : { filter: 'all' }, { replace: true });
+  };
 
   const [rows,    setRows]    = useState<RequestSummary[]>([]);
   const [query,   setQuery]   = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const filters: { projectId?: string; status?: string } = {};
+    const filters: { projectId?: string } = {};
     if (project) filters.projectId = project.id;
-    const statusParam = searchParams.get('status');
-    if (statusParam) filters.status = statusParam;
 
+    setLoading(true);
     requestsApi.list(filters).then(({ data }) => {
       setRows((data as { data: RequestSummary[] } | null)?.data ?? []);
       setLoading(false);
     });
-  }, [project?.id, searchParams.get('status')]);
+  }, [project?.id]);
 
-  const filtered = rows.filter(r =>
-    r.title.toLowerCase().includes(query.toLowerCase()) ||
-    r.reference.toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = rows
+    .filter(r => activeFilter === 'all' || !CLOSED_STATUSES.has(r.status))
+    .filter(r =>
+      r.title.toLowerCase().includes(query.toLowerCase()) ||
+      r.reference.toLowerCase().includes(query.toLowerCase())
+    );
 
   const cols = ['Type', 'Reference', 'Summary', 'Status', 'Request type', 'Organization', 'Reporter', 'Created', 'Updated', 'Due', 'Priority'];
 
-  // Navigate to detail: prefer project-scoped URL, fall back to /requests/:reference
   const openDetail = (r: RequestSummary) => {
     if (slug) {
       navigate(`/portal/${slug}/requests/${r.reference}`);
     } else {
-      // Global list — find the project slug from user's projects
       const proj = user?.projects.find(p => p.id === r.projectId);
       if (proj) navigate(`/portal/${proj.slug}/requests/${r.reference}`);
       else navigate(`/requests/${r.reference}`);
@@ -83,8 +91,20 @@ export default function ViewMyRequests() {
             <IconSearch size={16} />
             <input placeholder="Request contains..." value={query} onChange={e => setQuery(e.target.value)} />
           </label>
-          <button type="button" className="filter-pill is-active">Status: Open requests</button>
-          <button type="button" className="filter-pill">All</button>
+          <button
+            type="button"
+            className={`filter-pill${activeFilter === 'open' ? ' is-active' : ''}`}
+            onClick={() => setFilter('open')}
+          >
+            Status: Open requests
+          </button>
+          <button
+            type="button"
+            className={`filter-pill${activeFilter === 'all' ? ' is-active' : ''}`}
+            onClick={() => setFilter('all')}
+          >
+            All
+          </button>
           <button type="button" className="filter-pill">Request type</button>
         </div>
 

@@ -30,14 +30,9 @@ export default function TopNav() {
 
   const nav = (path: string) => { setOpen(false); navigate(path); };
 
-  // "My Requests" / "All Project Requests" link target
-  const requestsPath = () => {
-    if (isAdmin || isSuperAdmin) return '/requests';
-    if (currentSlug) return `/portal/${currentSlug}/requests`;
-    // CLIENT with no active project — go home to pick one
-    const first = user?.projects[0];
-    return first ? `/portal/${first.slug}/requests` : '/';
-  };
+  // Always goes to the global requests list — backend scopes results by role.
+  // Project-scoped request lists are accessed by navigating into a project, not via TopNav.
+  const requestsPath = () => '/requests';
 
   const initials = (user?.displayName ?? user?.email ?? 'YO')
     .split(/\s+/).filter(Boolean).slice(0, 2)
