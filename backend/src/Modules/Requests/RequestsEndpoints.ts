@@ -108,10 +108,12 @@ export function registerRequestsEndpoints(
       if (query.projectId) filters.projectId = query.projectId;
 
     } else if (role === 'ADMIN') {
-      // Tenant scope — clientId filter applied at repo level; optional project filter
+      // Project scope — sees all requests within assigned projects, no org filter
       if (query.projectId) {
         requireProjectAccess(req.user, query.projectId);
         filters.projectId = query.projectId;
+      } else {
+        filters.projectIds = req.user.projectIds ?? [];
       }
 
     } else if (role === 'AGENT') {
