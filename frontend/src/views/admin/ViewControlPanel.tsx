@@ -1,115 +1,143 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useParams, NavLink, Routes, Route, Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { formTemplatesApi, type FormTemplate } from '../../api/formTemplates';
 import TopNav from '../../components/layout/TopNav';
-import type { FormTemplate } from '../../api/formTemplates';
 
 export type CPSection = 'overview' | 'users' | 'projects' | 'forms' | 'form-builder' | 'project-members' | 'project-orgs';
 
-// Lazy-loaded at module level so React doesn't remount on every render
-const ViewCPOverview        = React.lazy(() => import('./ViewCPOverview'));
-const ViewCPUsers           = React.lazy(() => import('./ViewCPUsers'));
-const ViewCPProjects        = React.lazy(() => import('./ViewCPProjects'));
-const ViewCPProjectMembers  = React.lazy(() => import('./ViewCPProjectMembers'));
-const ViewCPOrganizations   = React.lazy(() => import('./ViewCPOrganizations'));
-const ViewCPForms           = React.lazy(() => import('./ViewCPForms'));
-const ViewCPFormBuilder     = React.lazy(() => import('./ViewCPFormBuilder'));
+// Lazy-loaded sub-panels
+const ViewCPOverview       = React.lazy(() => import('./ViewCPOverview'));
+const ViewCPUsers          = React.lazy(() => import('./ViewCPUsers'));
+const ViewCPProjects       = React.lazy(() => import('./ViewCPProjects'));
+const ViewCPProjectMembers = React.lazy(() => import('./ViewCPProjectMembers'));
+const ViewCPOrganizations  = React.lazy(() => import('./ViewCPOrganizations'));
+const ViewCPForms          = React.lazy(() => import('./ViewCPForms'));
+const ViewCPFormBuilder    = React.lazy(() => import('./ViewCPFormBuilder'));
 
-const SUPER_ADMIN_NAV: { id: CPSection; label: string }[] = [
-  { id: 'overview',      label: 'Overview' },
-  { id: 'users',         label: 'Users' },
-  { id: 'projects',      label: 'Projects' },
-  { id: 'project-orgs',  label: 'Organizations' },
-  { id: 'forms',         label: 'Forms' },
-];
-
-const ADMIN_NAV: { id: CPSection; label: string }[] = [
-  { id: 'forms', label: 'Forms' },
-];
-
-interface Props {
-  initialSection?: CPSection;
+// Thin wrapper — reads :projectId from URL, passes to ViewCPProjectMembers
+function ProjectMembersRoute({ onNavigate }: { onNavigate: (s: CPSection) => void }) {
+  const { projectId = '' } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  return (
+    <ViewCPProjectMembers
+      projectId={projectId}
+      onBack={() => navigate('/admin/projects')}
+    />
+  );
 }
 
-export default function ViewControlPanel({ initialSection }: Props) {
+// Thin wrapper — fetches template by :templateId, passes to ViewCPFormBuilder
+function FormBuilderRoute({ onNavigate }: { onNavigate: (s: CPSection, projectId?: string) => void }) {
+  const { templateId }  = useParams<{ templateId?: string }>();
+  const location        = useLocation();
+  const projectId       = (location.state as Record<string, string> | null)?.projectId;
+  const [template, setTemplate] = useState<FormTemplate | undefined>(undefined);
+  const [loading,  setLoading]  = useState(!!templateId);
+
+  useEffect(() => {
+    if (!templateId) return;
+    formTemplatesApi.getById(templateId).then(({ data }) => {
+      setTemplate(data ?? undefined);
+      setLoading(false);
+    });
+  }, [templateId]);
+
+  if (loading) return <div className="cp-loading">Loading form…</div>;
+
+  return (
+    <ViewCPFormBuilder
+      projectId={projectId}
+      editTemplate={template}
+      onNavigate={onNavigate}
+    />
+  );
+}
+
+const SUPER_ADMIN_NAV = [
+  { path: 'overview',       label: 'Overview' },
+  { path: 'users',          label: 'Users' },
+  { path: 'projects',       label: 'Projects' },
+  { path: 'organizations',  label: 'Organizations' },
+  { path: 'forms',          label: 'Forms' },
+] as const;
+
+const ADMIN_NAV = [
+  { path: 'forms', label: 'Forms' },
+] as const;
+
+export default function ViewControlPanel() {
   const { user } = useApp();
   const navigate  = useNavigate();
+
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdmin      = isSuperAdmin || user?.role === 'ADMIN';
   if (!isAdmin) { navigate('/', { replace: true }); return null; }
 
-  const defaultSection: CPSection = isSuperAdmin ? (initialSection ?? 'overview') : 'forms';
-  const [section,           setSection]           = useState<CPSection>(defaultSection);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
-  const [builderTemplate,   setBuilderTemplate]   = useState<FormTemplate | undefined>(undefined);
+  const navItems = isSuperAdmin ? SUPER_ADMIN_NAV : ADMIN_NAV;
+  const defaultSection = isSuperAdmin ? 'overview' : 'forms';
 
-  const nav = isSuperAdmin ? SUPER_ADMIN_NAV : ADMIN_NAV;
-
+  // Translate old CPSection enum to URL navigate — keeps sub-panel onNavigate props working
   const handleNavigate = (s: CPSection, projectId?: string, editTemplate?: FormTemplate) => {
-    if (projectId !== undefined) setSelectedProjectId(projectId);
-    else if (s === 'project-orgs') setSelectedProjectId(undefined);
-    if (s !== 'form-builder') setBuilderTemplate(undefined);
-    else if (editTemplate !== undefined) setBuilderTemplate(editTemplate);
-    setSection(s);
+    switch (s) {
+      case 'overview':        navigate('/admin/overview'); break;
+      case 'users':           navigate('/admin/users'); break;
+      case 'projects':        navigate('/admin/projects'); break;
+      case 'project-members': navigate(`/admin/projects/${projectId}/members`); break;
+      case 'project-orgs':    navigate('/admin/organizations'); break;
+      case 'forms':           navigate('/admin/forms'); break;
+      case 'form-builder':
+        if (editTemplate) navigate(`/admin/forms/${editTemplate.id}`, { state: { projectId } });
+        else navigate('/admin/forms/new', { state: { projectId } });
+        break;
+    }
   };
-
-  const mainNavSection = nav.find(n => n.id === section)?.id ?? null;
 
   return (
     <div className="view">
       <TopNav />
       <div className="cp-layout">
+
+        {/* Sidebar */}
         <nav className="cp-sidebar">
           <div className="cp-sidebar-header">
             <span className="cp-sidebar-title">{isSuperAdmin ? 'Control Panel' : 'Configure Forms'}</span>
             <button className="cp-back" onClick={() => navigate('/')}>← Portal</button>
           </div>
-          {nav.map(n => (
-            <button
-              key={n.id}
-              className={`cp-nav-item${mainNavSection === n.id ? ' is-active' : ''}`}
-              onClick={() => handleNavigate(n.id)}
+          {navItems.map(n => (
+            <NavLink
+              key={n.path}
+              to={`/admin/${n.path}`}
+              end={false}
+              className={({ isActive }) => `cp-nav-item${isActive ? ' is-active' : ''}`}
             >
               {n.label}
-            </button>
+            </NavLink>
           ))}
         </nav>
 
+        {/* Content — nested routes */}
         <main className="cp-content">
           <React.Suspense fallback={<div className="cp-loading">Loading…</div>}>
-            {section === 'overview' && (
-              <ViewCPOverview onNavigate={handleNavigate} />
-            )}
-            {section === 'users' && (
-              <ViewCPUsers />
-            )}
-            {section === 'projects' && (
-              <ViewCPProjects onNavigate={handleNavigate} />
-            )}
-            {section === 'project-members' && (
-              <ViewCPProjectMembers
-                projectId={selectedProjectId ?? ''}
-                onBack={() => handleNavigate('projects')}
-              />
-            )}
-            {section === 'project-orgs' && (
-              <ViewCPOrganizations
-                projectId={selectedProjectId}
-                onBack={selectedProjectId ? () => handleNavigate('projects') : undefined}
-              />
-            )}
-            {section === 'forms' && (
-              <ViewCPForms projectId={selectedProjectId} onNavigate={handleNavigate} />
-            )}
-            {section === 'form-builder' && (
-              <ViewCPFormBuilder
-                projectId={selectedProjectId}
-                editTemplate={builderTemplate}
-                onNavigate={handleNavigate}
-              />
-            )}
+            <Routes>
+              {/* Default redirect */}
+              <Route index element={<Navigate to={defaultSection} replace />} />
+
+              <Route path="overview" element={<ViewCPOverview onNavigate={handleNavigate} />} />
+              <Route path="users"    element={<ViewCPUsers />} />
+              <Route path="projects" element={<ViewCPProjects onNavigate={handleNavigate} />} />
+              <Route path="projects/:projectId/members" element={<ProjectMembersRoute onNavigate={handleNavigate} />} />
+              <Route path="organizations" element={<ViewCPOrganizations />} />
+              <Route path="forms"    element={<ViewCPForms onNavigate={handleNavigate} />} />
+              <Route path="forms/new"            element={<FormBuilderRoute onNavigate={handleNavigate} />} />
+              <Route path="forms/:templateId"    element={<FormBuilderRoute onNavigate={handleNavigate} />} />
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to={defaultSection} replace />} />
+            </Routes>
           </React.Suspense>
         </main>
+
       </div>
     </div>
   );

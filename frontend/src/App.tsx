@@ -40,7 +40,7 @@ export default function App() {
     <ErrorBoundary>
       <div className="scroll">
         <AppProvider>
-          <BrowserRouter>
+          <BrowserRouter basename="/provana/customer/portal">
             <Routes>
               {/* Public routes */}
               <Route path="/login"       element={<ViewLogin />} />
@@ -52,7 +52,7 @@ export default function App() {
                 <Route path="/"                                    element={<ViewPortal />} />
                 <Route path="/pick"                                element={<ViewProjectPicker />} />
                 <Route path="/profile"                             element={<ViewProfile />} />
-                <Route path="/admin"                               element={<ViewControlPanel />} />
+                <Route path="/admin/*"                             element={<ViewControlPanel />} />
                 <Route path="/requests"                            element={<ViewMyRequests />} />
                 <Route path="/requests/:reference"                 element={<ViewRequestDetail />} />
                 <Route path="/portal/:slug"                        element={<ViewFormsList />} />
